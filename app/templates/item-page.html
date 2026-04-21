@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% from "components/features/media-gallery.html" import media_gallery %}
+{% from "components/render-details.html" import render_details %}
+{% from "components/ui/badge.html" import badge %}
+{% from "components/ui/button.html" import button %}
+
+{% from "components/detail-page.html" import detail_page with context %}
+
+{% block content %}
+
+{% macro header_block() %}
+<div class="detail-page__header-content" data-reveal>
+  <div class="detail-page__badges flex gap-2">
+    {{ badge(item.category.name, 'badge--category', 'lg') }}
+    {{ badge(item.brand.name, 'badge--brand', 'lg') }}
+  </div>
+
+  <h1 class="detail-page__title luxury-text">{{ item.name }}</h1>
+</div>
+{% endmacro %}
+
+{% macro image_block() %}
+<div class="luxury-glow glass-card p-2" data-reveal>
+  {{ media_gallery(item) }}
+</div>
+{% endmacro %}
+
+{% macro content_block() %}
+<!-- Perfume Notes Section -->
+{% if item.perfume_notes %}
+<div class="perfume-notes glass-card p-6 luxury-glow" data-reveal>
+  <h3 class="perfume-notes__title flex items-center mb-6 font-bold text-xl">
+    <span class="perfume-notes__bar bg-gold mr-3" style="width: 4px; height: 24px; display: inline-block;"></span>
+    مكونات العطر (Fragrance Pyramid)
+  </h3>
+  <div class="perfume-notes__grid flex justify-between gap-4">
+    {% if item.perfume_notes.top %}
+    <div class="note-item flex flex-col items-center flex-1 text-center">
+      <div class="note-icon bg-secondary rounded-full w-12 h-12 flex items-center justify-center mb-2"><i class="fas fa-leaf text-gold"></i></div>
+      <span class="note-label text-xs font-bold text-muted-foreground uppercase">إفتتاحية العطر</span>
+      <p class="note-content mt-2 text-sm">{{ item.perfume_notes.top }}</p>
+    </div>
+    {% endif %}
+    
+    {% if item.perfume_notes.heart %}
+    <div class="note-item flex flex-col items-center flex-1 text-center">
+      <div class="note-icon bg-secondary rounded-full w-12 h-12 flex items-center justify-center mb-2"><i class="fas fa-heart text-gold"></i></div>
+      <span class="note-label text-xs font-bold text-muted-foreground uppercase">قلب العطر</span>
+      <p class="note-content mt-2 text-sm">{{ item.perfume_notes.heart }}</p>
+    </div>
+    {% endif %}
+
+    {% if item.perfume_notes.base %}
+    <div class="note-item flex flex-col items-center flex-1 text-center">
+      <div class="note-icon bg-secondary rounded-full w-12 h-12 flex items-center justify-center mb-2"><i class="fas fa-tree text-gold"></i></div>
+      <span class="note-label text-xs font-bold text-muted-foreground uppercase">قاعدة العطر</span>
+      <p class="note-content mt-2 text-sm">{{ item.perfume_notes.base }}</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<div class="item-content mt-8 p-6 glass-card" data-reveal>
+  <h3 class="item-content__title font-bold text-xl mb-4 border-b border-border pb-2 luxury-text">وصف العطر</h3>
+  <div class="prose prose-luxury">
+    {{ item.description }}
+  </div>
+</div>
+
+<!-- Price History Section -->
+<div class="price-analysis-card glass-card p-6 luxury-glow mt-8" data-reveal>
+  <h3 class="flex items-center gap-2 font-bold text-xl mb-6">
+    <i class="fas fa-chart-line text-gold"></i>
+    تاريخ السعر ومؤشر الشراء
+  </h3>
+  <div class="price-chart-container" style="position: relative; height:300px;">
+    <canvas id="priceChart" data-item-id="{{ item.id }}"></canvas>
+  </div>
+  <p class="text-muted-foreground text-xs mt-6 italic">
+    * يوضح هذا المخطط تحركات السعر في الفترة الأخيرة لمساعدتك في اختيار الوقت الأمثل للشراء.
+  </p>
+</div>
+{% endmacro %}
+
+{% macro sidebar_block() %}
+{% if item.quick_details %}
+<div class="item-details-card glass-card p-6 luxury-glow mb-6" data-reveal>
+  <h3 class="item-details-card__title flex items-center mb-6 font-bold text-lg">
+    <span class="item-details-card__bar bg-gold mr-3" style="width: 4px; height: 20px; display: inline-block;"></span>
+    مواصفات العطر
+  </h3>
+
+  <div class="item-details-card__items flex flex-col gap-3">
+    {% for detail in item.quick_details %}
+    <div class="item-detail-item flex items-center justify-between border-b border-border/50 pb-2">
+      <span class="item-detail-item__key text-muted-foreground text-sm font-medium">
+        {{ detail.key }}
+      </span>
+      <span class="item-detail-item__value font-bold text-sm">
+        {{ detail.value }}
+      </span>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if item.full_details|length > 4 %}
+    {{ button(
+      text="أعرض التفاصل الكاملة",
+      variant="outline",
+      size="sm",
+      class="w-full mt-6",
+      icon="fas fa-expand",
+      attrs={"data-full-details-open": "", "data-id": item.id}
+    ) }}
+  {% endif %}
+</div>
+{% endif %}
+
+{% if item.store_links %}
+  {% set store_links = item.store_links %}
+  <div class="purchase-options-wrapper" data-reveal>
+    {% include "components/features/purchase-options.html" %}
+  </div>
+{% endif %}
+{% endmacro %}
+
+
+{{ detail_page(
+  item,
+  header=header_block,
+  image=image_block,
+  content=content_block,
+  sidebar=sidebar_block
+) }}
+
+<!-- Perfume Clones Section -->
+{% if clones %}
+<section class="section section--clones container mt-12 mb-20" data-reveal>
+  <div class="section__header flex items-center justify-between mb-8">
+    <h2 class="title text-3xl font-bold luxury-text">
+      بدائل عطرية بأسعار أفضل (Clones)
+    </h2>
+  </div>
+  <div class="grid grid--items gap-6">
+    {% for clone in clones %}
+      {% set item = clone.item %}
+      <div class="relative">
+          <div class="clone-match-badge absolute top-4 left-4 z-10 bg-gold text-black px-3 py-1 rounded-full text-xs font-bold shadow-lg">
+            {{ clone.score }}% تطابق
+          </div>
+          {% include "components/cards/item-card.html" %}
+      </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% set full_details = item.full_details %}
+{% include "components/features/full-details.html" %}
+
+{% endblock %}

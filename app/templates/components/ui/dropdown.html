@@ -1,0 +1,27 @@
+{% macro dropdown(trigger_text="", trigger_icon="", items=[], class="") %}
+<div class="dropdown {{ class }}">
+  <button class="dropdown-trigger btn btn--ghost flex items-center gap-2" type="button" aria-haspopup="true" aria-expanded="false">
+    {% if trigger_icon %}
+      <i class="{{ trigger_icon }}"></i>
+    {% endif %}
+    {% if trigger_text %}
+      <span>{{ trigger_text }}</span>
+    {% endif %}
+    <i class="fas fa-chevron-down text-xs ml-1"></i>
+  </button>
+  <div class="dropdown-menu glass-card luxury-glow p-2">
+    {% for item in items %}
+      {% if item is string %}
+        <div class="dropdown-divider my-1 border-t border-border/50"></div>
+      {% else %}
+        <a href="{{ item.url | default('#') }}" class="dropdown-item rounded-md font-bold text-sm flex items-center gap-2">
+          {% if item.icon %}
+            <i class="{{ item.icon }} text-gold w-4 text-center"></i>
+          {% endif %}
+          <span>{{ item.text }}</span>
+        </a>
+      {% endif %}
+    {% endfor %}
+  </div>
+</div>
+{% endmacro %}

@@ -1,0 +1,48 @@
+{% from "components/ui/form.html" import form %}
+{% from "components/ui/button.html" import button %}
+{% from "components/ui/input.html" import input %}
+
+<p class="newsletter-description">
+  {% if is_subscribed %}
+    You are currently subscribed to our perfume newsletter.
+  {% else %}
+    Get the latest luxury perfume deals and scents delivered to your inbox.
+  {% endif %}
+</p>
+
+{% set action = url_for('main.unsubscribe') if is_subscribed
+  else url_for('main.subscribe') %}
+
+{% if is_subscribed %}
+  <p class="newsletter-success">
+    شكراً لاشتراكك معنا!
+  </p>
+{% endif %}
+
+{% call form("justify-center newsletter-form", form_action=action, attrs={"data-newsletter-form": ""}) %}
+  {% if is_subscribed %}
+    {{ button(text="إلغاء الاشتراك", type='submit') }}
+  {% else %}
+    {{ input(name='email', type='email',
+      placeholder="أدخل بريدك الإلكتروني",
+      required=not is_authenticated)
+    }}
+
+    {% set attrs = {'name': 'mode', 'value': 'guest'} %}
+
+    {{ button(text="اشترك الآن", type='submit', attrs=attrs) }}
+
+    {% if is_authenticated %}
+      {{ input(name='email', type='hidden',
+        value=current_user.email)
+      }}
+      <div class="newsletter-or flex items-center justify-center">أو</div>
+
+      {% set _ = attrs.update({'value': 'account'}) %}
+      
+      {{ button(text="اشترك باستخدام " ~ current_user.email, type='submit', attrs=attrs) }}
+
+    {% endif %}
+
+  {% endif %}
+{% endcall %}

@@ -1,0 +1,149 @@
+{% from "components/ui/form.html" import form %}
+{% from "components/ui/button.html" import button %}
+{% from "components/ui/input.html" import input %}
+
+<header class="site-header glass-header">
+
+  <div class="container">
+
+    <div class="header flex items-center justify-between">
+
+      <!-- Logo -->
+      <a href="/" class="logo group flex items-center gap-2">
+        <div class="logo__icon flex items-center justify-center bg-gold/10 w-10 h-10 rounded-full">
+          <i class="fas fa-spray-can-sparkles text-gold"></i>
+        </div>
+        <span class="logo__text luxury-text text-xl">عطري</span>
+      </a>
+
+      <!-- Actions -->
+      <div class="header-actions flex items-center">        
+        {% set v = 'ghost' %}
+        {% set class = 'btn--icon ' %}
+
+        <!-- Search -->
+        {{ button(variant=v,
+        class=class ~ "search-toggle",
+        icon="fas fa-search") }}
+
+        <!-- Theme -->
+        {{ button(variant=v,
+        class=class ~ "mode-toggle",
+        icon="far fa-sun") }}
+
+        <!-- Notifications -->
+        {% if is_authenticated %}
+        <div class="nav-notifications">
+          {{ button(variant=v,
+          class=class ~ "notifications-toggle",
+          icon="far fa-bell") }}
+          <span class="notification-badge is-hidden" id="notification-count">0</span>
+          
+          <div class="notifications-dropdown luxury-glow">
+            <div class="notifications-header flex items-center justify-between">
+              <h3>إشعاراتي</h3>
+              <button id="mark-all-read" class="text-gold text-xs">تحديد الكل كمقروء</button>
+            </div>
+            <div class="notifications-list" id="notifications-list">
+              <!-- Content loaded via JS -->
+              <div class="notifications-empty">ليس لديك إشعارات جديدة</div>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- User -->
+        <div class="nav-user">
+          {% set params = {} %}
+          
+          {% if is_authenticated %}
+            {% set _ = params.update({
+              'text': user_email[0].upper(),
+              'btn_span_class': "initial flex items-center justify-center"
+            }) %}
+          {% else %}
+            {% set _ = params.update({
+              'icon': "fa-regular fa-circle-user"
+            }) %}
+          {% endif %}
+
+          {% call button(
+            variant=v, class=class ~ "user-toggle", **params
+          ) %}
+            <i class="fas fa-chevron-down"></i>
+          {% endcall %}
+
+          <div class="user-dropdown">
+            {% set item_class = "dropdown-item flex items-center"%}
+            {% if is_authenticated %}
+              <div class="user-info {{ item_class }}" style="border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem; padding-bottom: 0.5rem;">
+                <span class="user-email text-gold" style="font-weight: bold; font-size: 0.9rem;">{{ user_email }}</span>
+              </div>
+              <a href="{{ url_for('main.profile') }}" class="{{ item_class }}">
+                <i class="fas fa-user-circle text-gold"></i>
+                الملف الشخصي
+              </a>
+              <a href="{{ url_for('main.logout') }}" class="{{ item_class }}">
+                <i class="fas fa-sign-out-alt"></i>
+                تسجيل الخروج
+              </a>
+            {% else %}
+              <a href="{{ url_for('main.login') }}" class="{{ item_class }}">
+                <i class="fas fa-sign-in-alt"></i>
+                Login
+              </a>
+              <a href="{{ url_for('main.register') }}" class="{{ item_class }}">
+                <i class="fas fa-user-plus"></i>
+                Sign Up
+              </a>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Mobile Menu -->
+        {{ button(
+        variant=v,
+        class=class ~ "mobile-menu-toggle",
+        icon="fas fa-bars") }}
+
+      </div>
+
+    </div>
+
+    <!-- Luxury Search Overlay -->
+    <div class="header-search luxury-search-overlay">
+      <div class="search-overlay-backdrop"></div>
+      <div class="search-overlay-content">
+        <button class="search-overlay-close btn--icon" type="button" aria-label="Close search">
+          <i class="fas fa-times"></i>
+        </button>
+        <h2 class="search-overlay-title">ما الذي تبحث عنه؟</h2>
+        {% call form("header-search__form luxury-search-form", variant="") %}
+          <div class="luxury-search-input-wrapper luxury-glow">
+            {{ input(
+              name="query", type="search",
+              placeholder="ابحث عن ماركة، عطر، توم فورد...",
+              class="header-search__input luxury-search-input"
+            ) }}
+            {{ button(type="submit", icon="fas fa-search header-search__icon", class="luxury-search-btn") }}
+          </div>
+        {% endcall %}
+      </div>
+    </div>
+
+    <!-- Mobile Navigation -->
+    <nav class="mobile-nav flex-col">
+      <a href="{{ url_for('main.items') }}" class="mobile-nav__link">
+        العطور
+      </a>
+      <a href="{{ url_for('main.about') }}" class="mobile-nav__link">
+        من نحن
+      </a>
+      <a href="{{ url_for('main.contact') }}" class="mobile-nav__link">
+        اتصل بنا
+      </a>
+    </nav>
+
+  </div>
+
+</header>

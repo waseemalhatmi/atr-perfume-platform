@@ -1,0 +1,101 @@
+<footer class="site-footer pt-20 pb-10">
+
+  <div class="container">
+
+    <!-- Newsletter -->
+    <div class="footer-newsletter mb-20" data-reveal>
+      <div class="newsletter-block glass-card luxury-glow p-8 md:p-16 text-center max-w-3xl mx-auto">
+
+        <div class="newsletter-icon bg-secondary w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-8">
+          <i class="fas fa-envelope text-gold text-3xl"></i>
+        </div>
+
+        <h3 class="newsletter-title text-3xl font-extrabold mb-8 luxury-text">
+          ابقَ على اطلاع بأحدث العطور
+        </h3>
+        
+        <div class="newsletter" data-newsletter>
+          {% include "partials/newsletter-block.html" %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Footer -->
+    <div class="footer-grid grid md:grid-cols-4 gap-12 border-b border-border/50 pb-12 mb-10">
+
+      <!-- Brand -->
+      <div class="footer-column footer-brand col-span-2">
+
+        <a href="/" class="footer-logo flex items-center gap-3 group mb-6">
+          <div class="footer-logo__icon bg-gold/10 w-12 h-12 rounded-full flex items-center justify-center group-hover:bg-gold/20 transition-all">
+            <i class="fas fa-spray-can-sparkles text-gold text-xl"></i>
+          </div>
+          <span class="footer-logo__text luxury-text text-2xl">عطري</span>
+        </a>
+
+        <p class="footer-description text-muted-foreground text-lg mb-8 max-w-md">
+          وجهتك المفضلة لاكتشاف أفضل العطور العالمية، مقارنة الأسعار، والحصول على توصيات ذكية تناسب ذوقك الرفيع.
+        </p>
+
+        <div class="footer-socials flex gap-4">
+          {% for name, url in social_links %}
+          <a href="{{ url }}" target="_blank" rel="noopener"
+            class="footer-social flex items-center justify-center w-10 h-10 rounded-full bg-secondary hover:bg-gold/20 hover:text-gold transition-all {{ name }}" aria-label="{{ name }}">
+            <i class="fab fa-{{ name }}{% if name == 'facebook' %}-f{% endif %}"></i>
+          </a>
+          {% endfor %}
+        </div>
+
+      </div>
+
+      {% set footer_cols = [
+        {'title': 'روابط سريعة', 'items': footer_pages},
+      ]%}
+
+      {% for col in footer_cols %}
+      <div class="footer-column">
+        <h4 class="footer-title text-sm font-bold uppercase tracking-widest text-muted-foreground mb-6">{{ col.title }}</h4>
+        <ul class="footer-items flex flex-col gap-4">
+          {% for slug, name in col['items'] %}
+          {% set url = url_for('main.' ~ slug) %}
+          <li class="footer-item">
+            <a href="{{ url }}" class="footer-link text-foreground hover:text-gold transition-colors">
+              {{ name }}
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endfor %}
+
+      <div class="footer-column">
+        <h4 class="footer-title text-sm font-bold uppercase tracking-widest text-muted-foreground mb-6">تواصل معنا</h4>
+        <ul class="footer-items flex flex-col gap-4">
+          <li class="flex items-center gap-3 text-muted-foreground">
+            <i class="fas fa-headset text-gold"></i>
+            <span>دعم العملاء 24/7</span>
+          </li>
+          <li class="flex items-center gap-3 text-muted-foreground">
+            <i class="fas fa-envelope text-gold"></i>
+            <span>support@atr.com</span>
+          </li>
+        </ul>
+      </div>
+
+    </div>
+
+
+    <!-- Bottom -->
+    <div class="footer-bottom flex flex-col md:flex-row items-center justify-between gap-6 py-6">
+      <p class="footer-copy text-muted-foreground text-sm">
+        © {{ current_year }} <span class="luxury-text">عطري</span>. جميع الحقوق محفوظة.
+      </p>
+      <div class="flex items-center gap-6 text-xs text-muted-foreground uppercase tracking-widest">
+        <a href="#" class="hover:text-gold transition-colors">سياسة الخصوصية</a>
+        <a href="#" class="hover:text-gold transition-colors">الشروط والأحكام</a>
+      </div>
+    </div>
+
+  </div>
+
+</footer>

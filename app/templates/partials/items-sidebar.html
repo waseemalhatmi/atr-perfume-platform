@@ -1,0 +1,70 @@
+<aside class="luxury-filter-sidebar glass-card luxury-glow" id="luxuryFilterSidebar">
+  <div class="filter-header border-b border-border/50 pb-4 mb-6">
+    <h3 class="luxury-text flex items-center gap-2">
+      <i class="fas fa-sliders-h"></i> 
+      تصنيف العطور
+    </h3>
+    <button class="mobile-filter-close md:hidden hover:text-gold transition-colors" type="button" aria-label="إغلاق الفلاتر">
+      <i class="fas fa-times"></i>
+    </button>
+  </div>
+  
+  <form id="luxury-filter-form" action="{{ url_for('main.items') }}" method="GET">
+    
+    <!-- Group: Sort -->
+    <div class="filter-group mb-8">
+      <h4 class="filter-group-title text-xs uppercase tracking-widest text-muted-foreground font-bold mb-3">الترتيب حسب</h4>
+      <div class="filter-select-wrapper relative">
+        <select name="sort" class="luxury-select w-full bg-secondary/50 border border-border rounded-lg px-4 py-2 text-sm cursor-pointer focus:border-gold outline-none transition-all">
+          <option value="newest" {% if current_sort == 'newest' %}selected{% endif %}>الأحدث إضافة</option>
+          <option value="oldest" {% if current_sort == 'oldest' %}selected{% endif %}>الأقدم</option>
+        </select>
+        <i class="fas fa-chevron-down select-icon absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none text-xs"></i>
+      </div>
+    </div>
+
+    <!-- Group: Categories -->
+    <div class="filter-group mb-8">
+      <h4 class="filter-group-title text-xs uppercase tracking-widest text-muted-foreground font-bold mb-3">الفئات</h4>
+      <div class="filter-options flex flex-col gap-3">
+        {% for cat in categories %}
+        <label class="luxury-checkbox flex items-center gap-3 cursor-pointer group text-sm">
+          <div class="relative flex items-center">
+            <input type="checkbox" name="category" value="{{ cat.id }}" class="sr-only peer"
+                   {% if cat.id|string in selected_categories %}checked{% endif %}>
+            <div class="checkmark w-5 h-5 border border-border rounded bg-secondary/50 peer-checked:bg-gold peer-checked:border-gold transition-all relative">
+              <i class="fas fa-check absolute inset-0 flex items-center justify-center text-[10px] text-black opacity-0 peer-checked:opacity-100"></i>
+            </div>
+          </div>
+          <span class="label-text group-hover:text-gold transition-colors">{{ cat.name }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Group: Brands -->
+    <div class="filter-group">
+      <h4 class="filter-group-title text-xs uppercase tracking-widest text-muted-foreground font-bold mb-3">الماركات العالمية</h4>
+      <div class="filter-options flex flex-col gap-3">
+        {% for brand in brands %}
+        <label class="luxury-checkbox flex items-center gap-3 cursor-pointer group text-sm">
+          <div class="relative flex items-center">
+            <input type="checkbox" name="brand" value="{{ brand.id }}" class="sr-only peer"
+                   {% if brand.id|string in selected_brands %}checked{% endif %}>
+            <div class="checkmark w-5 h-5 border border-border rounded bg-secondary/50 peer-checked:bg-gold peer-checked:border-gold transition-all relative">
+              <i class="fas fa-check absolute inset-0 flex items-center justify-center text-[10px] text-black opacity-0 peer-checked:opacity-100"></i>
+            </div>
+          </div>
+          <span class="label-text group-hover:text-gold transition-colors">{{ brand.name }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Auto-submit on change if possible, or a button for mobile -->
+    <noscript>
+      <button type="submit" class="btn btn--luxury w-full mt-6">تحديث النتائج</button>
+    </noscript>
+    
+  </form>
+</aside>

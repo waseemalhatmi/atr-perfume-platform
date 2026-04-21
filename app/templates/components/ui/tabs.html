@@ -1,0 +1,21 @@
+{% macro tabs(items=[], active_key="", class="", id=None) %}
+<div class="tabs {{ class }}" {% if id %}id="{{ id }}"{% endif %}>
+  <div class="tabs__list flex border-b border-border mb-6" role="tablist">
+    {% for item in items %}
+      <button
+        class="tabs__trigger px-4 py-3 -mb-px border-b-2 font-bold text-sm transition-all {{ 'border-gold text-gold luxury-glow' if item.key == active_key else 'border-transparent text-muted-foreground hover:text-gold' }}"
+        role="tab"
+        aria-selected="{{ 'true' if item.key == active_key else 'false' }}"
+        data-tab-target="{{ item.key }}"
+      >
+        {{ item.label }}
+      </button>
+    {% endfor %}
+  </div>
+  <div class="tabs__content">
+    {% if caller is defined %}
+      {{ caller() }}
+    {% endif %}
+  </div>
+</div>
+{% endmacro %}

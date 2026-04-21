@@ -1,0 +1,49 @@
+{% from "components/listing-page.html" import listing_page %}
+{% from "components/grid.html" import grid %}
+{% from "components/ui/form.html" import form %}
+{% from "components/ui/button.html" import button %}
+{% from "components/ui/input.html" import input %}
+
+{% call(slot) listing_page("search-results-page") %}
+
+{% if slot == 'title' %}
+<h1 class="page__title">بحث</h1>
+{% endif %}
+
+
+{% if slot == 'search' %}
+<form action="{{ url_for('main.search') }}" method="GET" class="luxury-search-form" style="margin-bottom: 3rem;">
+  <div class="luxury-search-input-wrapper luxury-glow">
+    <input
+      name="q"
+      type="search"
+      placeholder="ابحث عن ماركة، عطر..."
+      class="luxury-search-input"
+      value="{{ query if query else '' }}"
+    />
+    <button type="submit" class="luxury-search-btn">
+      <i class="fas fa-search"></i>
+    </button>
+  </div>
+</form>
+
+{% if query %}
+<p class="results-count text">
+  تم العثور على {{ search_results|length }} نتيجة{{ '' if search_results|length == 1 else '' }} لـ "{{ query }}"
+</p>
+{% endif %}
+{% endif %}
+
+{% if search_results %}
+{% if slot == 'found_content' %}
+{{ grid(search_results) }}
+{% endif %}
+{% else %}
+{% if slot == 'empty_content' %}
+<div class="listing-page__empty">
+  <p class="text">لم يتم العثور على نتائج. جرب كلمات مختلفة.</p>
+</div>
+{% endif %}
+{% endif %}
+
+{% endcall %}

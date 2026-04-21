@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}عطري | ملفي الشخصي{% endblock %}
+
+{% block content %}
+<section class="luxury-profile-page" style="padding: 100px 0 50px 0; min-height: 80vh;">
+  <div class="container">
+    
+    <div class="profile-header text-center" style="margin-bottom: 3rem;">
+      <h1 style="color: var(--gold-primary); font-size: var(--text-4xl); margin-bottom: 0.5rem;">أهلاً بك، {{ current_user.email.split('@')[0] }}</h1>
+      <p style="color: var(--muted-foreground);">لوحة التحكم الخاصة بك</p>
+    </div>
+
+    <div class="grid grid--custom-sidebar" style="gap: 2rem; grid-template-columns: 250px 1fr;">
+      
+      <!-- Profile Sidebar -->
+      <aside class="profile-sidebar luxury-glow" style="background: var(--card); border-radius: var(--radius-lg); padding: 1.5rem; height: auto; align-self: start;">
+        <ul class="profile-nav" style="list-style: none; padding: 0; margin: 0;">
+          <li style="margin-bottom: 1rem;">
+            <button class="profile-tab-btn active" data-target="wishlist" style="width: 100%; text-align: right; background: transparent; border: none; color: #fff; font-size: 1.1rem; padding: 0.8rem; border-radius: var(--radius-md); cursor: pointer; display: flex; align-items: center; gap: 0.8rem; transition: background 0.3s; background: var(--surface);">
+              <i class="fas fa-heart text-gold"></i> مفضلتي
+            </button>
+          </li>
+          <li>
+            <button class="profile-tab-btn" data-target="settings" style="width: 100%; text-align: right; background: transparent; border: none; color: #fff; font-size: 1.1rem; padding: 0.8rem; border-radius: var(--radius-md); cursor: pointer; display: flex; align-items: center; gap: 0.8rem; transition: background 0.3s;">
+              <i class="fas fa-cog text-gold"></i> إعدادات الأمان
+            </button>
+          </li>
+        </ul>
+      </aside>
+
+      <!-- Profile Content Area -->
+      <div class="profile-content">
+        
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category }}" style="padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1.5rem; border-left: 4px solid var(--gold-primary); background: var(--surface);">
+                {{ message }}
+              </div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        <!-- Tab 1: Wishlist -->
+        <div id="tab-wishlist" class="profile-tab-pane active" style="animation: fadeIn 0.5s ease;">
+          <h2 style="font-size: var(--text-2xl); margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem;"><i class="fas fa-bookmark text-gold"></i> العطور المحفوظة</h2>
+          
+          {% if saved_items %}
+            <div class="grid grid--3">
+              {% for item in saved_items %}
+                {% include 'components/cards/item-card.html' %}
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="text-center luxury-glow" style="padding: 3rem; background: var(--card); border-radius: var(--radius-lg);">
+              <i class="fas fa-box-open" style="font-size: 3rem; color: var(--gold-secondary); margin-bottom: 1rem;"></i>
+              <p style="color: var(--muted-foreground); font-size: 1.1rem;">لم تقم بحفظ أي عطور بعد.</p>
+              <a href="{{ url_for('main.items') }}" class="btn btn--outline" style="margin-top: 1rem;">تصفح العطور</a>
+            </div>
+          {% endif %}
+        </div>
+
+        <!-- Tab 2: Settings -->
+        <div id="tab-settings" class="profile-tab-pane" style="display: none; animation: fadeIn 0.5s ease;">
+          <h2 style="font-size: var(--text-2xl); margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem;"><i class="fas fa-user-shield text-gold"></i> تغيير كلمة المرور</h2>
+          
+          <div class="luxury-glow" style="background: var(--card); border-radius: var(--radius-lg); padding: 2rem;">
+            {% if current_user.provider %}
+              <p style="color: var(--muted-foreground);">أنت مسجل الدخول باستخدام {{ current_user.provider|title }}. لا يمكنك تغيير كلمة المرور من هنا.</p>
+            {% else %}
+              <form action="{{ url_for('main.update_password') }}" method="POST">
+                <div style="margin-bottom: 1.5rem;">
+                  <label style="display: block; margin-bottom: 0.5rem; color: #fff;">كلمة المرور الحالية</label>
+                  <input type="password" name="old_password" required class="luxury-search-input" style="width: 100%;" placeholder="أدخل كلمة المرور الحالية">
+                </div>
+                <div style="margin-bottom: 1.5rem;">
+                  <label style="display: block; margin-bottom: 0.5rem; color: #fff;">كلمة المرور الجديدة</label>
+                  <input type="password" name="new_password" required minlength="6" class="luxury-search-input" style="width: 100%;" placeholder="أدخل كلمة المرور الجديدة">
+                </div>
+                <div style="margin-bottom: 2rem;">
+                  <label style="display: block; margin-bottom: 0.5rem; color: #fff;">تأكيد كلمة المرور الجديدة</label>
+                  <input type="password" name="confirm_password" required minlength="6" class="luxury-search-input" style="width: 100%;" placeholder="أعد إدخال كلمة المرور الجديدة">
+                </div>
+                <button type="submit" class="btn btn--primary" style="background: var(--luxury-gradient); color: #000; font-weight: bold; border-radius: var(--radius-full); padding: 0.8rem 2rem;">
+                  حفظ التغييرات
+                </button>
+              </form>
+            {% endif %}
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const tabs = document.querySelectorAll('.profile-tab-btn');
+    const panes = document.querySelectorAll('.profile-tab-pane');
+    
+    // Check URL for active tab
+    const urlParams = new URLSearchParams(window.location.search);
+    const activeTab = urlParams.get('tab') || 'wishlist';
+
+    function switchTab(targetId) {
+      tabs.forEach(t => {
+        t.style.background = 'transparent';
+        t.classList.remove('active');
+        if (t.dataset.target === targetId) {
+          t.style.background = 'var(--surface)';
+          t.classList.add('active');
+        }
+      });
+      panes.forEach(p => {
+        p.style.display = 'none';
+        if (p.id === 'tab-' + targetId) {
+          p.style.display = 'block';
+        }
+      });
+      
+      // Update URL without reloading
+      const url = new URL(window.location);
+      url.searchParams.set('tab', targetId);
+      window.history.pushState({}, '', url);
+    }
+
+    // Initialize
+    switchTab(activeTab);
+
+    // Click evts
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        switchTab(tab.dataset.target);
+      });
+    });
+  });
+</script>
+<style>
+  @media (max-width: 768px) {
+    .grid--custom-sidebar { grid-template-columns: 1fr !important; }
+    .profile-nav { display: flex; gap: 1rem; overflow-x: auto; padding-bottom: 0.5rem !important; }
+    .profile-nav li { margin-bottom: 0 !important; flex: 1; }
+    .profile-tab-btn { justify-content: center; white-space: nowrap; }
+  }
+</style>
+{% endblock %}

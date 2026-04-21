@@ -1,0 +1,20 @@
+{% macro input(name="", type="text", id=None, value="", placeholder="", class="", required=False, invalid=False, error_id=None, aria_label=None, size="md", attrs=None) %}
+{% set base_class = 'checkbox' if type == 'checkbox' else 'input' %}
+<input
+  type="{{ type }}"
+  name="{{ name }}"
+  id="{{ id or name }}"
+  value="{{ value }}"
+  placeholder="{{ placeholder }}"
+  class="{{ base_class }} {{ base_class }}--{{ size }} {{ 'is-invalid' if invalid else '' }} {{ class }}"
+  {% if required %}required aria-required="true"{% endif %}
+  {% if invalid %}aria-invalid="true"{% endif %}
+  {% if aria_label %}aria-label="{{ aria_label }}"{% endif %}
+  {% if error_id and invalid %}aria-describedby="{{ error_id }}"{% elif id %}aria-describedby="{{ id }}-hint"{% endif %}
+  {% if attrs %}
+    {% for key, val in attrs.items() %}
+      {{ key }}="{{ val }}"
+    {% endfor %}
+  {% endif %}
+>
+{% endmacro %}

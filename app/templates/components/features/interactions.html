@@ -1,0 +1,21 @@
+{% from"components/ui/button.html" import button %}
+<div class="interaction-panel" data-type="{{ item.card_type }}" data-id="{{ item.id }}">
+
+  <!-- Actions -->
+  <div class="interaction-panel__actions flex items-center">
+    {% set v = 'outline' %}
+    {% set class = 'interaction-btn ' %}
+    {% set icon_class = ' interaction-icon' %}
+
+    <!-- Save -->
+    {{ button(variant=v, class=class ~ "save-btn",
+    icon="fa fa-bookmark" ~ icon_class)
+    }}
+
+    <!-- Share -->
+    {{ button(variant=v, class=class ~ "share-btn",
+    icon="fa fa-share-alt")
+    }}
+
+  </div>
+</div>

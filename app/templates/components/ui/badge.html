@@ -1,0 +1,5 @@
+{% macro badge(text="", class="", variant="brand", size="md") %}
+<span class="badge badge--{{ variant }} badge--{{ size }} {{ class }}">
+  {{ text }}
+</span>
+{% endmacro %}

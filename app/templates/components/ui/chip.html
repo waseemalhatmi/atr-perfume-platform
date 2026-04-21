@@ -1,0 +1,15 @@
+{% macro chip(text="", class="", variant="brand", size="md", removable=False, on_remove=None) %}
+<div class="chip badge badge--{{ variant }} badge--{{ size }} {{ class }} inline-flex items-center gap-1.5 transition-all hover:brightness-95">
+  <span class="chip__text">{{ text }}</span>
+  {% if removable %}
+    <button 
+      type="button" 
+      class="chip__remove-btn flex items-center justify-center rounded-full hover:bg-black/10 transition-colors"
+      {% if on_remove %}onclick="{{ on_remove }}"{% endif %}
+      aria-label="Remove {{ text }}"
+    >
+      <i class="fas fa-times text-[0.6rem]"></i>
+    </button>
+  {% endif %}
+</div>
+{% endmacro %}

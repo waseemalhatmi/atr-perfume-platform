@@ -1,0 +1,27 @@
+{% macro button(text="", type="button", variant="primary", size="md", class="", icon=None, loading=False, id=None, aria_label=None, attrs=None) %}
+<button
+  type="{{ type }}"
+  {% if id %}id="{{ id }}"{% endif %}
+  class="btn btn--{{ variant }} btn--{{ size }} {{ 'is-loading' if loading else '' }} {{ class }}"
+  {% if aria_label %}aria-label="{{ aria_label }}"{% endif %}
+  {% if attrs %}
+    {% for key, value in attrs.items() %}
+      {{ key }}="{{ value }}"
+    {% endfor %}
+  {% endif %}
+>
+  {% if icon and not loading %}
+    <i class="{{ icon }}" aria-hidden="true"></i>
+  {% endif %}
+
+  {% if text %}
+    <span class="btn-text">
+      {{ text }}
+    </span>
+  {% endif %}
+  
+  {% if caller is defined %}
+    {{ caller() }}
+  {% endif %}
+</button>
+{% endmacro %}

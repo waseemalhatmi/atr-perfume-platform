@@ -1,0 +1,56 @@
+<!-- index.html -->
+{% extends "base.html" %}
+{% from "components/section.html" import section %}
+{% from "components/grid.html" import grid %}
+{% from "components/ui/button.html" import button %}
+
+{% block title %}عطري | الرئيسية{% endblock %}
+
+{% block content %}
+<section class="hero-luxury">
+  <div class="hero-luxury__bg">
+    <img src="{{ url_for('static', filename='uploads/lux_hero.png') }}" alt="Luxury Perfume" />
+  </div>
+  <div class="hero-luxury__overlay"></div>
+  <div class="hero-luxury__content" data-reveal="fade-up">
+    <h1 class="hero-luxury__title luxury-text">عالم العطور الفاخرة بين يديك</h1>
+    <p class="hero-luxury__subtitle">اكتشف أرقى الروائح العالمية وقارن الأسعار من أفضل المتاجر في مكان واحد.</p>
+    <div class="hero-luxury__actions flex flex-wrap gap-4 justify-center md:justify-start">
+      {{ button(
+        text="اكتشف الآن",
+        variant="luxury",
+        size="lg",
+        icon="fas fa-chevron-left",
+        class="px-8",
+        attrs={"onclick": "window.location.href='" ~ url_for('main.items') ~ "'"}
+      ) }}
+      
+      {{ button(
+        text="اكتشف عطرك المثالي",
+        variant="outline",
+        size="lg",
+        icon="fas fa-magic",
+        class="quiz-open-btn px-8",
+        attrs={"style": "border-color: var(--gold-primary); color: #fff;"}
+      ) }}
+    </div>
+  </div>
+</section>
+
+<div class="container py-20" data-reveal>
+  {% set sections = [
+    {"section":"perfumes","section_title":"اكتشف العطور", "cards": items} 
+  ] %}
+
+  {% for s in sections %}
+    {% call section(s.section_title, s.section ) %}
+      <div class="mt-8">
+        {{ grid(s.cards) }}
+      </div>
+    {% endcall %}
+  {% endfor %}
+</div>
+
+{% include 'partials/quiz-modal.html' %}
+
+{% endblock %}

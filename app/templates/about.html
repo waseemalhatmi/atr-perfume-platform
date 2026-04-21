@@ -1,0 +1,51 @@
+{% extends"base.html" %} {% block title %}Atr-i | About{% endblock %}
+{%
+block content %} {% from"components/page.html" import page %}
+{% call page("About <span>Atr-i</span>","about-page") %}
+
+<p class="text">
+  Atr-i is a specialized perfume platform dedicated to helping you discover the finest luxury fragrances and comparing prices across the best trusted stores.
+</p>
+<h2 class="page__subtitle">Our Mission</h2>
+<p class="page__text">Our mission is to simplify the perfume shopping experience. We provide detailed information about fragrance notes, longevity, and sillage, along with real-time price comparisons so you can find your perfect scent at the best value.
+</p>
+
+<h2 class="page__subtitle">What We Cover</h2>
+<ul class="page__items">
+    <li class="page__item">
+      <strong>
+      <i class="fas fa-spray-can"></i>
+      Fragrance Reviews
+      </strong>
+      Honest feedback on longevity and sillage for men, women, and niche perfumes.
+    </li>
+    <li class="page__item">
+      <strong>
+      <i class="fas fa-tags"></i>
+      Price Comparison
+      </strong>
+      We track prices from major retailers like Amazon, Sephora, and Noon.
+    </li>
+    <li class="page__item">
+      <strong>
+      <i class="fas fa-search"></i>
+      Scent Discovery
+      </strong>
+      A complete guide to perfume pyramids (Top, Heart, and Base notes).
+    </li>
+</ul>
+
+<h2 class="page__subtitle">Our Core Values</h2>
+<ul class="page__items">
+  <li>Accuracy in fragrance notes and components</li>
+  <li>Helping users find the best market value</li>
+  <li>Transparency in affiliate recommendations</li>
+</ul>
+
+<h2 class="page__subtitle">Our Vision</h2>
+<p class="page__text">
+  We aim to become the leading digital destination for perfume lovers globally, providing the most comprehensive fragrance database and unbeatable price insights.
+</p>
+
+{% endcall %}
+{% endblock %}

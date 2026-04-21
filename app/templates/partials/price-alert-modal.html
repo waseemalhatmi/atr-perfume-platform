@@ -1,0 +1,27 @@
+<!-- Price Alert Modal -->
+<div id="price-alert-modal" class="luxury-search-overlay">
+  <div class="search-overlay-backdrop alert-backdrop"></div>
+  <div class="search-overlay-content" style="background: var(--card); border-radius: var(--radius-xl); padding: 3rem; text-align: center; max-width: 500px;">
+    <button class="search-overlay-close alert-close-btn" type="button"><i class="fas fa-times"></i></button>
+    <h2 class="search-overlay-title" style="font-size: var(--text-2xl); margin-bottom: 1rem;"><i class="fas fa-bell"></i> تنبيه انخفاض السعر</h2>
+    <p style="color: var(--muted-foreground); margin-bottom: 2rem;">أدخل السعر الذي تود الشراء عنده، وسنقوم بإعلامك فور انخفاض السعر.</p>
+    
+    <form id="price-alert-form">
+      <input type="hidden" name="item_id" id="price-alert-item-id">
+      
+      <div class="luxury-search-input-wrapper luxury-glow" style="margin-bottom: 1.5rem; flex-direction: column; align-items: stretch;">
+        <input type="number" name="target_price" id="target_price" required min="1" step="0.01" class="luxury-search-input" placeholder="السعر المستهدف ($)..." style="font-size: 1.25rem;">
+      </div>
+      
+      {% if not current_user.is_authenticated %}
+      <div class="luxury-search-input-wrapper luxury-glow" style="margin-bottom: 1.5rem; flex-direction: column; align-items: stretch;">
+        <input type="email" name="email" required class="luxury-search-input" placeholder="بريدك الإلكتروني..." style="font-size: 1.25rem;">
+      </div>
+      {% endif %}
+      
+      <button type="submit" class="btn btn--primary" style="width: 100%; background: var(--luxury-gradient); color: #000; font-size: 1.25rem; font-weight: bold; border-radius: var(--radius-full);">
+        تأكيد التنبيه
+      </button>
+    </form>
+  </div>
+</div>

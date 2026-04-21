@@ -1,0 +1,61 @@
+{% from "components/shared/image-utils.html" import render_image %}
+{% from "components/ui/button.html" import button %}
+{% from "components/ui/badge.html" import badge %}
+
+<article class="card card--item luxury-glow glass-card" data-type="item" data-id="{{ item.id }}" data-reveal>
+  <a href="{{ url_for('main.item_page', item_id=item.id) }}" class="card__img-link">
+    <div class="card__img-wrapper">
+      {{ render_image(
+        item.images[0].image_path if item.images else 'uploads/placeholder.jpg',
+        item.name
+      ) }}
+      <div class="card__img-overlay"></div>
+      {{ badge(text='Premium', variant='luxury', size='sm', class='card__type-badge') }}
+    </div>
+  </a>
+
+  <div class="card__content">
+    <div class="card__meta-top flex items-center justify-between">
+      <div class="flex gap-2">
+        {{ badge(text=item.category.name, variant="category", size="sm") }}
+        {{ badge(text=item.brand.name, variant="brand", size="sm") }}
+      </div>
+      <div class="card__rating flex items-center gap-1">
+        <i class="fas fa-star" style="color: var(--brand-orange); font-size: 0.8rem;"></i>
+        <span class="text-xs font-bold">4.7</span>
+      </div>
+    </div>
+
+    <a href="{{ url_for('main.item_page', item_id=item.id) }}">
+      <h3 class="card__title luxury-text mt-3">
+        {{ item.name }}
+      </h3>
+    </a>
+
+    <div class="card__meta-bottom flex items-center justify-between mt-4">
+      <div class="item-price-range luxury-text text-xl">
+        {{ item.store_links[0].price|string ~ ' ' ~ item.store_links[0].currency if item.store_links else 'متاح للطلب' }}
+      </div>
+      
+      <div class="flex items-center gap-2">
+        {{ button(
+          variant="outline", 
+          size="sm", 
+          class="btn--icon price-alert-trigger", 
+          icon="fas fa-bell", 
+          aria_label="تنبيه السعر",
+          attrs={"data-item-id": item.id, "title": "نبهني عند انخفاض السعر"}
+        ) }}
+        
+        {{ button(
+          text="التفاصيل",
+          variant="luxury",
+          size="sm",
+          icon="fas fa-eye",
+          class="px-4",
+          attrs={"onclick": "window.location.href='" ~ url_for('main.item_page', item_id=item.id) ~ "'"}
+        ) }}
+      </div>
+    </div>
+  </div>
+</article>

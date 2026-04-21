@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% from "components/ui/button.html" import button %}
+{% from "components/ui/badge.html" import badge %}
+{% from "components/ui/input.html" import input %}
+{% from "components/ui/field.html" import field %}
+{% from "components/ui/select.html" import select %}
+{% from "components/ui/tabs.html" import tabs %}
+{% from "components/ui/chip.html" import chip %}
+
+{% block content %}
+<div class="container py-20">
+  <header class="mb-12">
+    <h1 class="text-4xl font-extrabold mb-4">UI Component Library</h1>
+    <p class="text-muted-foreground">Standardized atoms for the Generic Item Architecture.</p>
+  </header>
+
+  <section class="mb-16">
+    <h2 class="text-2xl font-bold mb-6 border-b pb-2">Buttons</h2>
+    <div class="flex flex-wrap gap-4 items-center">
+      {{ button(text="Primary", variant="primary") }}
+      {{ button(text="Secondary", variant="secondary") }}
+      {{ button(text="Outline", variant="outline") }}
+      {{ button(text="Ghost", variant="ghost") }}
+      {{ button(text="Danger", variant="danger") }}
+    </div>
+    <div class="mt-8 flex flex-wrap gap-4 items-center">
+      {{ button(text="Small", variant="primary", size="sm") }}
+      {{ button(text="Medium", variant="primary", size="md") }}
+      {{ button(text="Large", variant="primary", size="lg") }}
+    </div>
+    <div class="mt-8 flex flex-wrap gap-4 items-center">
+      {{ button(text="Loading", variant="primary", loading=True) }}
+      {{ button(text="With Icon", variant="outline", icon="fas fa-plus") }}
+    </div>
+  </section>
+
+  <section class="mb-16">
+    <h2 class="text-2xl font-bold mb-6 border-b pb-2">Badges & Chips</h2>
+    <div class="flex flex-wrap gap-4 items-center">
+      {{ badge(text="Brand", variant="brand") }}
+      {{ badge(text="Category", variant="category") }}
+      {{ badge(text="Device", variant="device") }}
+      {{ badge(text="Deal", variant="deal") }}
+    </div>
+    <div class="mt-8 flex flex-wrap gap-4 items-center">
+      {{ chip(text="Removable Chip", removable=True) }}
+      {{ chip(text="Success Chip", variant="deal") }}
+      {{ chip(text="Large Chip", size="lg") }}
+    </div>
+  </section>
+
+  <section class="mb-16">
+    <h2 class="text-2xl font-bold mb-6 border-b pb-2">Forms & Inputs</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-2xl">
+      {{ field(label_text="Full Name", for_id="name", hint="Enter your legal name") }}
+        {{ input(name="name", id="name", placeholder="John Doe") }}
+      {{ endfield }}
+
+      {{ field(label_text="Email Address", for_id="email", error="Please enter a valid email") }}
+        {{ input(name="email", id="email", type="email", value="invalid-email", invalid=True) }}
+      {{ endfield }}
+
+      {{ field(label_text="Favorite Store", for_id="store") }}
+        {{ select(name="store", id="store", options=[
+          {'label': 'Amazon', 'value': 'amazon'},
+          {'label': 'Noon', 'value': 'noon'},
+          {'label': 'Jarir', 'value': 'jarir'}
+        ]) }}
+      {{ endfield }}
+    </div>
+  </section>
+
+  <section class="mb-16">
+    <h2 class="text-2xl font-bold mb-6 border-b pb-2">Tabs</h2>
+    {{ tabs(items=[
+      {'key': 'overview', 'label': 'Overview'},
+      {'key': 'specs', 'label': 'Specifications'},
+      {'key': 'reviews', 'label': 'Reviews'}
+    ], active_key="overview") }}
+  </section>
+</div>
+{% endblock %}

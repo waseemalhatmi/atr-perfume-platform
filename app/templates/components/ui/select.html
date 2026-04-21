@@ -1,0 +1,27 @@
+{% macro select(name="", id=None, options=[], selected_value="", class="", required=False, invalid=False, aria_label=None, size="md") %}
+<div class="select-wrapper relative">
+  <select
+    name="{{ name }}"
+    id="{{ id or name }}"
+    class="input input--{{ size }} {{ 'is-invalid' if invalid else '' }} {{ class }} appearance-none pr-10"
+    {% if required %}required aria-required="true"{% endif %}
+    {% if invalid %}aria-invalid="true"{% endif %}
+    {% if aria_label %}aria-label="{{ aria_label }}"{% endif %}
+  >
+    {% for option in options %}
+      {% if option is mapping %}
+        <option value="{{ option.value }}" {{ 'selected' if option.value|string == selected_value|string else '' }}>
+          {{ option.label }}
+        </option>
+      {% else %}
+        <option value="{{ option }}" {{ 'selected' if option|string == selected_value|string else '' }}>
+          {{ option }}
+        </option>
+      {% endif %}
+    {% endfor %}
+  </select>
+  <div class="select-icon absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
+    <i class="fas fa-chevron-down text-xs"></i>
+  </div>
+</div>
+{% endmacro %}

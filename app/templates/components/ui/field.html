@@ -1,0 +1,21 @@
+{% from "components/ui/label.html" import label %}
+{% macro field(label_text="", for_id="", class="", label_class="", error=None, hint=None) %}
+<div class="field flex flex-col gap-1.5 {{ class }} {{ 'has-error' if error else '' }}">
+  {% if label_text %}
+    {{ label(label_text, for_id, label_class) }}
+  {% endif %}
+  
+  <div class="field__control flex flex-col gap-1 relative">
+    {{ caller() }}
+  </div>
+
+  {% if error %}
+    <div class="field--error mt-1 text-sm font-bold flex items-center gap-2" id="{{ for_id }}-error" role="alert" aria-live="polite">
+      <i class="fas fa-exclamation-circle"></i>
+      <span>{{ error }}</span>
+    </div>
+  {% elif hint %}
+    <p class="form-description text-xs text-muted-foreground mt-1" id="{{ for_id }}-hint">{{ hint }}</p>
+  {% endif %}
+</div>
+{% endmacro %}
