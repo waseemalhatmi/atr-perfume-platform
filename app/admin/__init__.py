@@ -1,0 +1,6 @@
+from flask import Blueprint
+
+admin_bp = Blueprint('admin', __name__, url_prefix='/api/admin')
+
+# Import modules to register routes
+from . import dashboard, items, users, settings
