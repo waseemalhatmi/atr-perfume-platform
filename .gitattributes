@@ -1,0 +1,50 @@
+# =============================================================================
+# .gitattributes — Line Ending Normalization
+# Ensures shell scripts and Docker files always use LF (Unix) line endings,
+# even when developed on Windows. CRLF in .sh files breaks Linux containers.
+# =============================================================================
+
+# ── Default: normalize all text files ────────────────────────────────────────
+* text=auto
+
+# ── Shell scripts: MUST use LF — CRLF breaks bash in Linux/Docker ────────────
+*.sh text eol=lf
+
+# ── Docker files: use LF for consistency ─────────────────────────────────────
+Dockerfile text eol=lf
+.dockerignore text eol=lf
+
+# ── Python files: LF (standard for cross-platform Python) ────────────────────
+*.py text eol=lf
+
+# ── Config files ──────────────────────────────────────────────────────────────
+*.cfg text eol=lf
+*.ini text eol=lf
+*.toml text eol=lf
+Procfile text eol=lf
+
+# ── Frontend ──────────────────────────────────────────────────────────────────
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.jsx text eol=lf
+*.json text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+
+# ── Binary files: never modify line endings ───────────────────────────────────
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg binary
+*.mp4 binary
+*.webm binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.pdf binary
+*.zip binary
