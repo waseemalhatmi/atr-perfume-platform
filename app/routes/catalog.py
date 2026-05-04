@@ -198,6 +198,7 @@ def api_search(validated_data: SearchRequestSchema):
 
 
 @catalog_bp.route("/api/filters", methods=["GET"])
+@limiter.exempt
 def api_filters():
     """Return available filter options (categories & brands) — cached 1 hour."""
     _ck = "catalog:filters"
