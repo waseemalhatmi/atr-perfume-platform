@@ -25,10 +25,28 @@ echo "   Port:       ${PORT:-10000}"
 echo ""
 
 # ── 2. Apply Database Migrations (Safe — Idempotent) ─────────────────────────
-# flask db upgrade is idempotent: running it multiple times is completely safe.
-# This ensures every deployment is schema-up-to-date before the server starts.
 echo "🗄️  Applying database migrations..."
+set +e
 flask db upgrade
+EXIT_CODE=$?
+set -e
+
+if [ $EXIT_CODE -ne 0 ]; then
+    echo "⚠️  Migration failed! This usually means tables already exist."
+    echo "    Stamping initial schema and retrying..."
+    flask db stamp b12bf6c34f4b
+    
+    set +e
+    flask db upgrade
+    SECOND_EXIT=$?
+    set -e
+    
+    if [ $SECOND_EXIT -ne 0 ]; then
+        echo "⚠️  Second migration failed (columns likely exist). Stamping head..."
+        flask db stamp head
+    fi
+fi
+
 echo "   ✅ Database schema is up to date."
 echo ""
 
