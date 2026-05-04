@@ -24,6 +24,7 @@ def _serialize_user(user):
 # ─── Routes ─────────────────────────────────────────────────────────────────
 
 @auth_bp.route("/me", methods=["GET"])
+@limiter.exempt
 def me():
     """Return the currently logged-in user, or 401 if anonymous."""
     if not current_user.is_authenticated:

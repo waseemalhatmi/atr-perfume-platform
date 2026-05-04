@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: atr-perfume-platform
+    runtime: docker
+    healthCheckPath: /health
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: HTTPS_ENABLED
+        value: "True"
+      - key: PYTHONUNBUFFERED
+        value: "1"

@@ -6,14 +6,35 @@ from flask_login import LoginManager
 from authlib.integrations.flask_client import OAuth
 from logging.handlers import RotatingFileHandler
 from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
 from flask_cors import CORS
 from .models import User
 from config import Config
 from .extensions import db, mail, migrate, cache
 
-# Rate limiter — initialized here so blueprints can import it
-limiter = Limiter(key_func=get_remote_address)
+
+def _get_real_client_ip() -> str:
+    """
+    Extract the real client IP from the request.
+
+    Render (and most cloud platforms) terminate TLS and proxy requests,
+    so `request.remote_addr` is always 127.0.0.1 or the internal load
+    balancer IP.  The actual client IP is in the X-Forwarded-For header.
+
+    Security note: We take the LAST trusted hop from X-Forwarded-For to
+    prevent IP spoofing by clients who forge their own header.
+    Render always appends its own verified hop at the end.
+    """
+    forwarded_for = request.headers.get("X-Forwarded-For", "")
+    if forwarded_for:
+        # Render appends the verified client IP as the last entry
+        ips = [ip.strip() for ip in forwarded_for.split(",") if ip.strip()]
+        if ips:
+            return ips[-1]  # Last hop = Render-verified real client IP
+    return request.remote_addr or "127.0.0.1"
+
+
+# Rate limiter — uses real client IP, not the Render proxy IP
+limiter = Limiter(key_func=_get_real_client_ip)
 
 
 def create_app():
