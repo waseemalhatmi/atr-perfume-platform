@@ -1,9 +1,11 @@
+"""
+ai_service.py — Gemini AI chatbot service for ATR Perfume Platform.
 
+Compatible with google-generativeai >= 0.5.x
+"""
 import os
 import logging
 import google.generativeai as genai
-from app.models import Item
-from app.services.vector_service import vector_service
 
 logger = logging.getLogger(__name__)
 
@@ -13,75 +15,59 @@ class AIService:
         self.api_key = os.getenv("GEMINI_API_KEY")
         if self.api_key:
             genai.configure(api_key=self.api_key)
-        # Prefer stable flash model; fallback list for resilience
+            logger.info("Gemini AI configured successfully.")
+        else:
+            logger.warning("GEMINI_API_KEY is not set — AI chat will be disabled.")
+
+        # Models in order of preference (most capable → fastest fallback)
         self._model_priority = [
             "gemini-1.5-flash",
             "gemini-1.5-flash-latest",
-            "gemini-pro",
+            "gemini-1.0-pro",
         ]
 
+    # ── System Instruction ────────────────────────────────────────────────────
+
     def _build_system_instruction(self, user_message: str) -> str:
-        related_items = []
-        try:
-            related_items = vector_service.semantic_search(user_message, limit=5)
-        except Exception as db_err:
-            logger.warning(f"AI context fetch error: {db_err}")
-
-        catalog_snippet = ""
-        if related_items:
-            catalog_snippet = "العطور المتاحة:\n"
-            for i in related_items:
-                try:
-                    price = getattr(i, "min_price_sql", "N/A")
-                    brand_name = i.brand.name if i.brand else ""
-                    catalog_snippet += f"- {i.name} (ID: {i.id}) من براند {brand_name} | {price}\n"
-                except Exception:
-                    continue
-
-        return f"""
-        أنت "الخبير العطري" (The Scent Connoisseur) والحارس لهوية ATR Perfumes الفاخرة. ✨🧴
-        مهمتك هي تقديم تجربة استشارية راقية، مخصصة، ومنظمة للغاية.
-
-        سياق المنتجات المتوفرة حالياً في متجرنا:
-        {catalog_snippet if catalog_snippet else "مجموعتنا العطرية الفاخرة متوفرة وتشمل أرقى الماركات العالمية (Chanel, Dior, Tom Ford, YSL, Amouage)."}
-
-        القواعد الصارمة للهوية والرد:
-        1. التحية والافتتاحية: ابدأ دائماً بترحيب دافئ وراقي يليق بعالم الفخامة.
-        2. التنسيق المرئي: استخدم العناوين العريضة (Bold) لأسماء العطور، والقوائم المنقطة.
-        3. المحتوى الاحترافي: اشرح "النوتات العطرية" بأسلوب وصفي جذاب، واذكر المناسبة المناسبة.
-        4. بطاقات المنتجات الذكية: ضع الكود [PRODUCT:ID] مباشرة بعد اسم العطر إذا كان متوفراً.
-        5. الخاتمة: اختم بسؤال تفاعلي لبق أو عرض للمساعدة الإضافية. ✨
-
-        اللغة: العربية الفصحى الحديثة، بأسلوب "Luxury Concierge".
         """
-
-    def _get_model(self, model_name: str):
-        """Instantiate a Gemini model. system_instruction supported in genai>=0.5."""
-        system_instruction = None
+        Build the AI persona + product context.
+        Falls back gracefully if the DB / vector service is unavailable.
+        """
+        catalog_snippet = ""
         try:
-            # Build system instruction text (may fail if DB is down)
-            system_instruction = self._build_system_instruction("")
-        except Exception:
-            pass
+            from app.services.vector_service import vector_service
+            if user_message:
+                related = vector_service.semantic_search(user_message, limit=5)
+                if related:
+                    catalog_snippet = "العطور المتاحة:\n"
+                    for i in related:
+                        try:
+                            price = getattr(i, "min_price_sql", "N/A")
+                            brand = i.brand.name if i.brand else ""
+                            catalog_snippet += f"- {i.name} (ID: {i.id}) من براند {brand} | {price}\n"
+                        except Exception:
+                            continue
+        except Exception as e:
+            logger.warning(f"Could not build product context: {e}")
 
-        try:
-            # New SDK (>=0.5): system_instruction is a top-level kwarg
-            return genai.GenerativeModel(
-                model_name=model_name,
-                system_instruction=system_instruction,
-            )
-        except TypeError:
-            # Old SDK (<0.5): system_instruction not supported — use bare model
-            logger.warning(
-                f"SDK version does not support system_instruction. Using bare model: {model_name}"
-            )
-            return genai.GenerativeModel(model_name=model_name)
+        return (
+            "أنت «الخبير العطري» (The Scent Connoisseur) — مستشار عطور فاخر لمنصة ATR. ✨🧴\n\n"
+            "مهمتك تقديم تجربة استشارية راقية ومنظمة.\n\n"
+            f"{catalog_snippet if catalog_snippet else 'مجموعتنا تشمل أرقى الماركات: Chanel, Dior, Tom Ford, YSL, Amouage.'}\n\n"
+            "القواعد:\n"
+            "1. ابدأ بترحيب دافئ يليق بعالم الفخامة.\n"
+            "2. استخدم **Bold** لأسماء العطور، وقوائم منظمة.\n"
+            "3. اشرح النوتات العطرية (أفتتاحية، قلب، قاعدة) بوصف جذاب.\n"
+            "4. أذكر [PRODUCT:ID] مباشرة بعد اسم العطر إذا كان متوفراً في السياق.\n"
+            "5. اختم بسؤال تفاعلي أو عرض مساعدة. ✨\n"
+            "اللغة: العربية الفصحى الحديثة بأسلوب Luxury Concierge."
+        )
+
+    # ── Internal helpers ──────────────────────────────────────────────────────
 
     def _clean_history(self, history: list) -> list:
         cleaned = []
-        if not history:
-            return cleaned
-        for h in history:
+        for h in (history or []):
             try:
                 role = "user" if h.get("role") == "user" else "model"
                 parts = h.get("parts", [])
@@ -95,47 +81,70 @@ class AIService:
                 continue
         return cleaned
 
-    def get_response(self, user_message: str, history=None) -> str:
-        """Single-shot response with model failover."""
-        if not self.api_key:
-            return "⚠️ خدمة الذكاء الاصطناعي غير مفعّلة حالياً."
+    def _make_model(self, model_name: str, system_instruction: str):
+        """
+        Instantiate a GenerativeModel.
+        Handles both old SDK (no system_instruction) and new SDK (>= 0.5).
+        """
+        try:
+            return genai.GenerativeModel(
+                model_name=model_name,
+                system_instruction=system_instruction,
+            )
+        except TypeError:
+            # Older SDK version: system_instruction not yet supported
+            logger.warning(f"SDK does not support system_instruction; using bare model {model_name}")
+            return genai.GenerativeModel(model_name=model_name)
 
-        cleaned_history = self._clean_history(history or [])
+    # ── Public API ────────────────────────────────────────────────────────────
+
+    def get_response(self, user_message: str, history=None) -> str:
+        """Single-shot response with automatic model failover."""
+        if not self.api_key:
+            return "⚠️ خدمة الذكاء الاصطناعي غير مفعّلة — يرجى إضافة GEMINI_API_KEY."
+
+        system_instruction = self._build_system_instruction(user_message)
+        cleaned_history = self._clean_history(history)
 
         for model_name in self._model_priority:
             try:
-                model = self._get_model(model_name)
+                model = self._make_model(model_name, system_instruction)
                 chat = model.start_chat(history=cleaned_history)
                 response = chat.send_message(user_message)
+                logger.info(f"AI response generated using {model_name}")
                 return response.text
             except Exception as e:
-                logger.warning(f"Model {model_name} failed in get_response: {e}")
+                logger.warning(f"Model {model_name} failed: {e}")
                 continue
 
-        return "أعتذر منك، جميع قنواتنا العطرية مشغولة حالياً. ✨ يرجى المحاولة بعد دقيقة."
+        logger.error("All Gemini models failed in get_response.")
+        return "أعتذر، خدمة الذكاء الاصطناعي غير متاحة مؤقتاً. يرجى المحاولة بعد قليل."
 
     def stream_response(self, user_message: str, history=None):
-        """Streaming response generator with model failover."""
+        """Streaming response generator with automatic model failover."""
         if not self.api_key:
-            yield "⚠️ خدمة الذكاء الاصطناعي غير مفعّلة حالياً."
+            yield "⚠️ خدمة الذكاء الاصطناعي غير مفعّلة — يرجى إضافة GEMINI_API_KEY."
             return
 
-        cleaned_history = self._clean_history(history or [])
+        system_instruction = self._build_system_instruction(user_message)
+        cleaned_history = self._clean_history(history)
 
         for model_name in self._model_priority:
             try:
-                model = self._get_model(model_name)
+                model = self._make_model(model_name, system_instruction)
                 chat = model.start_chat(history=cleaned_history)
                 response = chat.send_message(user_message, stream=True)
                 for chunk in response:
                     if chunk.text:
                         yield chunk.text
-                return  # Success — exit generator
+                logger.info(f"AI stream completed using {model_name}")
+                return  # ✅ success — stop iterating models
             except Exception as e:
-                logger.warning(f"Model {model_name} failed in stream_response: {e}")
+                logger.warning(f"Model {model_name} failed in stream: {e}")
                 continue
 
-        yield "أعتذر منك بشدة، جميع قنواتنا العطرية مشغولة حالياً. ✨ يرجى المحاولة بعد دقيقة."
+        logger.error("All Gemini models failed in stream_response.")
+        yield "أعتذر، خدمة الذكاء الاصطناعي غير متاحة مؤقتاً. يرجى المحاولة بعد قليل."
 
 
 ai_service = AIService()
