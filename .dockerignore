@@ -1,0 +1,86 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# .dockerignore — Professional Docker Ignore File
+# Excludes all unnecessary files from the Docker build context.
+# This keeps the image small, build fast, and secrets safe.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.egg
+.eggs/
+dist/
+build/
+
+# ── Virtual Environments ─────────────────────────────────────────────────────
+venv/
+env/
+.venv/
+ENV/
+.env.local
+
+# ── Secrets — NEVER copy into image ──────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+.secrets/
+
+# ── Frontend Build Artifacts (will be rebuilt inside Docker) ─────────────────
+frontend/node_modules/
+frontend/dist/
+
+# ── Root node_modules (if any) ───────────────────────────────────────────────
+node_modules/
+
+# ── Git & IDE ─────────────────────────────────────────────────────────────────
+.git/
+.gitignore
+.github/
+.vscode/
+.idea/
+
+# ── Testing & CI ─────────────────────────────────────────────────────────────
+.pytest_cache/
+tests/
+.coverage
+htmlcov/
+.tox/
+
+# ── Database & Migrations (SQLite dev db only — prod uses PostgreSQL) ─────────
+instance/
+*.db
+*.sqlite3
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+logs/
+*.log
+
+# ── Celery Artifacts ─────────────────────────────────────────────────────────
+celerybeat-schedule
+celerybeat.pid
+
+# ── OS Files ─────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.tmp
+*.bak
+
+# ── Archive & Development Extras ─────────────────────────────────────────────
+archive/
+scratch/
+appDataDir/
+
+# ── Documentation (not needed at runtime) ────────────────────────────────────
+*.md
+ui_plan.md
+project_guide.md
+implementation_checklist.md
