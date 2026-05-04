@@ -10,7 +10,7 @@ export const useAnalytics = () => {
       // Example: window.dataLayer?.push({ event: eventName, ...properties })
       
       // Simulate non-blocking network request
-      if (process.env.NODE_ENV === 'production') {
+      if (import.meta.env.PROD) {
         // fetch('/api/analytics/track', { method: 'POST', body: JSON.stringify({ eventName, properties }), keepalive: true }).catch(() => {})
       }
     } catch (e) {

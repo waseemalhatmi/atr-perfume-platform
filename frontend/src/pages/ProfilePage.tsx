@@ -161,7 +161,7 @@ export default function ProfilePage() {
                     key={item.id} 
                     item={item as any} 
                     index={i} 
-                    isSavedBatch={savedBatch?.[`item:${item.id}`] ?? true} 
+                    isSaved={savedBatch?.[`item:${item.id}`] ?? true} 
                   />
                 ))}
               </div>
