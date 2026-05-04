@@ -124,10 +124,10 @@ ENV PORT=10000
 EXPOSE 10000
 
 # ── Health Check ─────────────────────────────────────────────────────────────
-# Docker/Render will use this to verify the container is alive.
-# It checks the /api/filters endpoint every 30 seconds.
+# Uses the dedicated /health endpoint (never rate-limited, always fast).
+# Render's uptime monitor also hits this — must always return 200.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:${PORT}/api/filters || exit 1
+    CMD curl -f http://localhost:${PORT}/health || exit 1
 
 # ── Launch Command ────────────────────────────────────────────────────────────
 # Use the entrypoint script which handles migrations THEN starts the server

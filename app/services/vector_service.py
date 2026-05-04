@@ -47,11 +47,12 @@ class VectorService:
     @retry(max_attempts=3, delay=1.0, backoff=2.0)
     def _call_gemini_api(self, text_content: str):
         """Wrapped API call with Circuit Breaker and Retry."""
+        # Note: request_options is only supported in google-generativeai>=0.5
+        # We use a compatible call that works across versions
         result = genai.embed_content(
             model=self.model,
             content=text_content,
             task_type="retrieval_document",
-            request_options={"timeout": 5.0} # Fix #5: 5s timeout to prevent API hangs
         )
         return result["embedding"]
 

@@ -22,7 +22,7 @@ from app.utils.serializers import _serialize_item, _serialize_variant, _serializ
 
 
 @catalog_bp.route("/api/items", methods=["GET"])
-@limiter.limit("120 per minute")
+@limiter.limit("300 per minute")
 def api_items():
     """List & filter perfumes with pagination."""
     # ── Parse params early (needed for cache key) ────────────────────────────

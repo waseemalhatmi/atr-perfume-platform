@@ -333,6 +333,10 @@ def create_app():
         return send_from_directory(uploads_dir, filename)
 
     # ── Register blueprints ───────────────────────────────────────────────────
+    # health MUST be first — it's used by Render's uptime monitor
+    from .routes.health import health_bp
+    app.register_blueprint(health_bp)
+
     from .routes.auth import auth_bp
     app.register_blueprint(auth_bp)
 

@@ -114,9 +114,12 @@ class Config:
     # Rate limiting — MUST use Redis in production
     RATELIMIT_ENABLED = os.environ.get("RATELIMIT_ENABLED", "True") == "True"
     RATELIMIT_HEADERS_ENABLED = True
-    RATELIMIT_DEFAULT = os.environ.get("RATELIMIT_DEFAULT", "200 per day;50 per hour")
+    # Each page load triggers multiple API calls simultaneously.
+    # 1000/day, 200/hour allows normal browsing while still blocking bots.
+    RATELIMIT_DEFAULT = os.environ.get("RATELIMIT_DEFAULT", "1000 per day;200 per hour;30 per minute")
     RATELIMIT_STORAGE_URI = _ratelimit_uri
-    RATELIMIT_SWALLOW_ERRORS = True # Fix #4: If Redis fails, Rate Limiter fails OPEN to avoid downtime
+    RATELIMIT_SWALLOW_ERRORS = True  # If Redis fails, fail OPEN to avoid downtime
+    RATELIMIT_KEY_PREFIX = "rl:"     # Namespace prefix to avoid key collisions
 
 
 # ── Social Links (non-sensitive, OK to be in code) ───────────────────────────
