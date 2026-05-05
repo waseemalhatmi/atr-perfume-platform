@@ -373,6 +373,9 @@ def create_app():
     from .routes.seo import seo_bp
     app.register_blueprint(seo_bp)
 
+    from .routes.admin import admin_bp
+    app.register_blueprint(admin_bp)
+
     # ── Production Logging System (JSON structured) ───────────────────────────
     if not os.path.exists('logs'):
         os.mkdir('logs')

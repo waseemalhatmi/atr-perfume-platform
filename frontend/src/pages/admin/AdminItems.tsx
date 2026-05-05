@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { fetchAdminItems, deleteAdminItem, fetchAdminFormMeta } from '@/lib/adminApi'
 import toast from 'react-hot-toast'
+import AdminItemModal from '@/components/admin/AdminItemModal'
 
 export default function AdminItems() {
   const queryClient = useQueryClient()
@@ -172,6 +173,12 @@ export default function AdminItems() {
           </div>
         </div>
       </div>
+
+      <AdminItemModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        item={selectedItem} 
+      />
     </div>
   )
 }
