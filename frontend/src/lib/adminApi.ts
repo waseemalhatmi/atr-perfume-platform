@@ -22,6 +22,11 @@ export const fetchAdminFormMeta = async () => {
   return res.data
 }
 
+export const fetchAdminItem = async (id: number) => {
+  const res = await API.get(`/items/${id}`)
+  return res.data
+}
+
 export const addAdminItem = async (formData: FormData) => {
   const res = await API.post('/items', formData)
   return res.data
