@@ -102,7 +102,7 @@ export default function AdminSettings() {
   const addBrand = useMutation({
     mutationFn: addAdminBrand,
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['adminBrands'] }); toast.success('تم إضافة البراند') },
-    onError: () => toast.error('فشل في الإضافة')
+    onError: (err: any) => toast.error(err.response?.data?.error || 'فشل في الإضافة')
   })
   const deleteBrand = useMutation({
     mutationFn: deleteAdminBrand,
@@ -117,7 +117,7 @@ export default function AdminSettings() {
   const addCategory = useMutation({
     mutationFn: addAdminCategory,
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['adminCategories'] }); toast.success('تم إضافة التصنيف') },
-    onError: () => toast.error('فشل في الإضافة')
+    onError: (err: any) => toast.error(err.response?.data?.error || 'فشل في الإضافة')
   })
   const deleteCategory = useMutation({
     mutationFn: deleteAdminCategory,

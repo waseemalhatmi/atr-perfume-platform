@@ -151,7 +151,7 @@ def add_item():
         advanced_data_str = data.get('advanced_data', '{}')
         advanced_data = json.loads(advanced_data_str)
         
-        from app.utils.slugify import slugify
+        from app.utils.normalizers import generate_slug as slugify
         
         new_item = Item(
             name=data.get('name'),
@@ -508,12 +508,17 @@ def get_brands():
 @admin_required
 def add_brand():
     name = request.json.get('name')
-    if name:
-        from app.utils.slugify import slugify
+    if not name:
+        return jsonify({"success": False, "error": "Name required"}), 400
+    try:
+        from app.utils.normalizers import generate_slug as slugify
         b = Brand(name=name, slug=slugify(name))
         db.session.add(b)
         db.session.commit()
-    return jsonify({"success": True})
+        return jsonify({"success": True, "id": b.id, "name": b.name})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": "هذه الماركة موجودة مسبقاً أو حدث خطأ."}), 400
 
 @admin_bp.route("/brands/<int:id>", methods=["DELETE"])
 @admin_required
@@ -534,12 +539,17 @@ def get_categories():
 @admin_required
 def add_category():
     name = request.json.get('name')
-    if name:
-        from app.utils.slugify import slugify
+    if not name:
+        return jsonify({"success": False, "error": "Name required"}), 400
+    try:
+        from app.utils.normalizers import generate_slug as slugify
         c = Category(name=name, slug=slugify(name))
         db.session.add(c)
         db.session.commit()
-    return jsonify({"success": True})
+        return jsonify({"success": True, "id": c.id, "name": c.name})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": "هذا التصنيف موجود مسبقاً أو حدث خطأ."}), 400
 
 @admin_bp.route("/categories/<int:id>", methods=["DELETE"])
 @admin_required
