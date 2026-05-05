@@ -472,10 +472,31 @@ def get_newsletter():
     subs = NewsletterSubscriber.query.all()
     return jsonify([{"email": s.email, "is_active": s.is_active} for s in subs])
 
-@admin_bp.route("/settings", methods=["GET", "PUT"])
+from app.models.settings import Setting
+
+@admin_bp.route("/settings", methods=["GET"])
 @admin_required
-def settings():
-    return jsonify({})
+def get_settings():
+    settings = Setting.query.all()
+    return jsonify([{"key": s.key, "value": s.value} for s in settings])
+
+@admin_bp.route("/settings", methods=["PUT"])
+@admin_required
+def update_settings():
+    data = request.json
+    if not data:
+        return jsonify({"success": False, "error": "No data provided"}), 400
+        
+    for k, v in data.items():
+        setting = Setting.query.get(k)
+        if setting:
+            setting.value = v
+        else:
+            setting = Setting(key=k, value=v)
+            db.session.add(setting)
+    
+    db.session.commit()
+    return jsonify({"success": True})
 
 @admin_bp.route("/brands", methods=["GET"])
 @admin_required
