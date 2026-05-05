@@ -170,7 +170,7 @@ def add_item():
             image_path = os.path.join(uploads_dir, filename)
             image.save(image_path)
             
-            item_img = ItemImage(item_id=new_item.id, image_path=filename, is_primary=True)
+            item_img = ItemImage(item_id=new_item.id, image_path=filename, position=0)
             db.session.add(item_img)
 
         # Handle Variants & Store Links
@@ -239,11 +239,11 @@ def update_item(item_id):
             image_path = os.path.join(uploads_dir, filename)
             image.save(image_path)
             
-            old_img = ItemImage.query.filter_by(item_id=item.id, is_primary=True).first()
+            old_img = ItemImage.query.filter_by(item_id=item.id, position=0).first()
             if old_img:
                 db.session.delete(old_img)
             
-            item_img = ItemImage(item_id=item.id, image_path=filename, is_primary=True)
+            item_img = ItemImage(item_id=item.id, image_path=filename, position=0)
             db.session.add(item_img)
 
         # Update variants
