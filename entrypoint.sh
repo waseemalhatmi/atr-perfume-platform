@@ -50,18 +50,14 @@ fi
 echo "   ✅ Database schema is up to date."
 echo ""
 
-# ── 3. Start Gunicorn Production Server ──────────────────────────────────────
-# Configuration explained:
-#   --bind          : Listen on 0.0.0.0 so Render/cloud can route traffic in
-#   --workers       : 2 workers per CPU core is the standard Gunicorn formula
-#   --worker-class  : gthread allows handling concurrent requests efficiently
-#   --threads       : 2 threads per worker for I/O-bound Flask requests
-#   --timeout       : Kill a worker if it hangs for more than 120 seconds
-#   --keep-alive    : Keep connections alive for 5 seconds (reduces TCP overhead)
-#   --access-logfile: Log every request to stdout (captured by Render logs)
-#   --error-logfile : Log errors to stderr (captured by Render logs)
-#   --log-level     : 'info' for production (change to 'debug' only when needed)
+# ── 3. Start Background Workers (Celery) ───────────────────────────────────
+echo "⚙️  Starting Celery Worker in background..."
+celery -A main.celery_app worker --loglevel=info --concurrency=1 &
 
+echo "⏱️  Starting Celery Beat in background..."
+celery -A main.celery_app beat --loglevel=info &
+
+# ── 4. Start Gunicorn Production Server ──────────────────────────────────────
 echo "🌐 Starting Gunicorn..."
 exec gunicorn main:app \
     --bind "0.0.0.0:${PORT:-10000}" \
