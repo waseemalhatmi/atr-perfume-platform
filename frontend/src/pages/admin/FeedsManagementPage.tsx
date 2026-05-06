@@ -160,16 +160,16 @@ export default function FeedsManagementPage() {
                 </div>
               </div>
               <div className={`p-2 px-4 rounded-xl text-xs font-bold flex items-center gap-2 ${
-                store.sync_status === 'success' ? 'bg-green-500/10 text-green-500 border border-green-500/20' :
-                store.sync_status === 'running' ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20 animate-pulse' :
-                store.sync_status === 'error' ? 'bg-red-500/10 text-red-500 border border-red-500/20' :
+                (store.sync_status || 'idle') === 'success' ? 'bg-green-500/10 text-green-500 border border-green-500/20' :
+                (store.sync_status || 'idle') === 'running' ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20 animate-pulse' :
+                (store.sync_status || 'idle') === 'error' ? 'bg-red-500/10 text-red-500 border border-red-500/20' :
                 'bg-secondary text-muted-foreground'
               }`}>
-                {store.sync_status === 'running' && <RefreshCw size={14} className="animate-spin" />}
-                {store.sync_status === 'success' && <CheckCircle2 size={14} />}
-                {store.sync_status === 'error' && <AlertCircle size={14} />}
-                {store.sync_status === 'idle' && <Clock size={14} />}
-                {store.sync_status.toUpperCase()}
+                {(store.sync_status || 'idle') === 'running' && <RefreshCw size={14} className="animate-spin" />}
+                {(store.sync_status || 'idle') === 'success' && <CheckCircle2 size={14} />}
+                {(store.sync_status || 'idle') === 'error' && <AlertCircle size={14} />}
+                {(store.sync_status || 'idle') === 'idle' && <Clock size={14} />}
+                {(store.sync_status || 'idle').toUpperCase()}
               </div>
             </div>
 
