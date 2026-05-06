@@ -1,4 +1,4 @@
-from celery import current_app as celery_app
+from app.celery_ext import celery_app
 from celery.exceptions import SoftTimeLimitExceeded, MaxRetriesExceededError
 from app.utils.logger import get_logger
 from app.extensions import db

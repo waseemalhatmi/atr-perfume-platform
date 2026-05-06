@@ -1,5 +1,6 @@
 # main.py
 from app import create_app, db
+from app.celery_ext import celery_app
 
 app = create_app()
 
