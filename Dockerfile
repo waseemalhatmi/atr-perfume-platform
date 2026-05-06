@@ -14,7 +14,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # STAGE 1: Frontend Builder
 # ─────────────────────────────────────────────────────────────────────────────
-FROM node:20-slim AS frontend-builder
+FROM node:22-slim AS frontend-builder
 
 LABEL stage="frontend-builder"
 
