@@ -14,6 +14,12 @@ def init_celery(app: Flask):
     
     # Configure broker/backend from Flask config
     broker_url = app.config.get("REDIS_URL", "redis://localhost:6379/0")
+
+    # Fix: Celery's Redis backend is strict about rediss:// URLs.
+    # It requires the ssl_cert_reqs parameter inside the URL string itself.
+    if broker_url and broker_url.startswith("rediss://") and "ssl_cert_reqs" not in broker_url:
+        sep = "&" if "?" in broker_url else "?"
+        broker_url = f"{broker_url}{sep}ssl_cert_reqs=none"
     
     celery_app.conf.update(
         broker_url=broker_url,

@@ -63,9 +63,16 @@ class _StructuredLogger(logging.Logger):
     """Extends stdlib Logger with keyword-argument style calls."""
 
     def _log_with_extras(self, level: int, msg: str, kwargs: dict):
+        # Extract standard logging kwargs to prevent conflicts in extra dict
+        exc_info = kwargs.pop("exc_info", None)
+        stack_info = kwargs.pop("stack_info", False)
+        stacklevel = kwargs.pop("stacklevel", 1)
         extra = kwargs.pop("extra", {})
+        
+        # Merge remaining kwargs into extra
         extra.update(kwargs)
-        super().log(level, msg, extra=extra)
+        
+        super().log(level, msg, exc_info=exc_info, stack_info=stack_info, stacklevel=stacklevel, extra=extra)
 
     def info(self, msg: str, *args, **kwargs):           # type: ignore[override]
         self._log_with_extras(logging.INFO,    msg, kwargs)
