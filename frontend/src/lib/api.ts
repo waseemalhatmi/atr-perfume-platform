@@ -41,7 +41,7 @@ api.interceptors.response.use(
 
 export interface StoreLink {
   id: number
-  store: { id: number; name: string; slug: string }
+  store: { id: number; name: string; slug: string; logo_url: string | null }
   price: number | null
   old_price: number | null
   currency: string | null
