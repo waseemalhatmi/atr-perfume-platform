@@ -12,6 +12,7 @@ const AdminMessages = lazy(() => import('@/pages/admin/AdminMessages'))
 const AdminNewsletter = lazy(() => import('@/pages/admin/AdminNewsletter'))
 const AdminAnalytics = lazy(() => import('@/pages/admin/AdminAnalytics'))
 const AdminSettings = lazy(() => import('@/pages/admin/AdminSettings'))
+const FeedsManagementPage = lazy(() => import('@/pages/admin/FeedsManagementPage'))
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuthStore()
@@ -40,6 +41,7 @@ export default function AdminApp() {
           <Route path="messages"   element={<AdminMessages />} />
           <Route path="newsletter" element={<AdminNewsletter />} />
           <Route path="analytics"  element={<AdminAnalytics />} />
+          <Route path="feeds"      element={<FeedsManagementPage />} />
           <Route path="settings"   element={<AdminSettings />} />
         </Route>
       </Routes>

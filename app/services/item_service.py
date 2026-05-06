@@ -22,6 +22,11 @@ def set_default_variant(item, variant):
     variant.is_default = True
 
 def ensure_default_variant(item):
+    """
+    Ensures an item has a default variant. Creates one if missing.
+    Always returns a valid ItemVariant instance.
+    """
+    from app.extensions import db
     if not item.variants:
         variant = ItemVariant(
             item=item,
@@ -30,10 +35,16 @@ def ensure_default_variant(item):
             attributes={}
         )
         item.variants.append(variant)
+        db.session.flush()  # Ensure variant.id is generated
         return variant
 
-    if not any(v.is_default for v in item.variants):
+    # Find or set the default variant
+    default = next((v for v in item.variants if v.is_default), None)
+    if not default:
         item.variants[0].is_default = True
+        default = item.variants[0]
+
+    return default  # Always return a variant
 
 def get_active_store_links(item):
     return [

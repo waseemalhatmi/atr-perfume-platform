@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Eye, Bell, Star, Heart, ArrowRightLeft } from 'lucide-react'
+import { Eye, Bell, Star, Heart, ArrowRightLeft, Zap } from 'lucide-react'
 import type { Item } from '@/lib/api'
 import { imageUrl } from '@/lib/api'
 import { calculateRating } from '@/lib/rating'
@@ -75,6 +75,15 @@ function ItemCard({ item, index = 0, isSaved: initialSaved = false, hasAlert: in
           {/* Badges */}
           <div className="absolute top-4 left-4 flex flex-col gap-2">
             <span className="badge--luxury text-[10px] py-1">PREMIUM</span>
+            {item.store_count > 1 && (
+              <motion.span 
+                initial={{ x: -20, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                className="bg-green-500 text-white text-[9px] font-black px-2 py-1 rounded-lg shadow-lg flex items-center gap-1"
+              >
+                <Zap size={10} className="fill-current" /> أفضل سعر
+              </motion.span>
+            )}
           </div>
 
           {/* Save button ❤️ */}

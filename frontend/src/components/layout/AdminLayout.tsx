@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { 
   LayoutDashboard, Package, Users, Settings, 
   MessageSquare, Mail, Home, LogOut, ChevronRight, 
-  Bell, Search, User as UserIcon, Brain
+  Bell, Search, User as UserIcon, Brain, Rss
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useThemeStore } from '@/store/themeStore'
@@ -22,6 +22,7 @@ export default function AdminLayout() {
   const menuItems = [
     { name: 'لوحة التحكم',    icon: <LayoutDashboard size={20} />, path: '/admin' },
     { name: 'إدارة العطور',   icon: <Package size={20} />,        path: '/admin/items' },
+    { name: 'المزامنة والـ XML', icon: <Rss size={20} />,          path: '/admin/feeds' },
     { name: 'المستخدمين',     icon: <Users size={20} />,          path: '/admin/users' },
     { name: 'الرسائل',        icon: <MessageSquare size={20} />,  path: '/admin/messages' },
     { name: 'النشرة البريدية',icon: <Mail size={20} />,           path: '/admin/newsletter' },

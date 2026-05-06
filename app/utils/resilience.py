@@ -205,3 +205,5 @@ def retry(max_attempts: int = 3, delay: float = 1.0,
 # Named instances so Redis keys are human-readable (circuit:ai:state, etc.)
 ai_circuit_breaker = CircuitBreaker(failure_threshold=3, recovery_timeout=120, name="ai")
 db_circuit_breaker = CircuitBreaker(failure_threshold=5, recovery_timeout=30,  name="db")
+feed_circuit_breaker = CircuitBreaker(failure_threshold=3, recovery_timeout=3600, name="feed") # 1 hour recovery
+

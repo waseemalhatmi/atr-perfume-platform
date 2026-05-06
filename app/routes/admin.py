@@ -559,3 +559,125 @@ def delete_category(id):
         db.session.delete(c)
         db.session.commit()
     return jsonify({"success": True})
+
+
+# ─── Store & Feed Management ──────────────────────────────────────────────
+
+@admin_bp.route("/stores", methods=["GET"])
+@admin_required
+def get_stores():
+    stores = Store.query.all()
+    return jsonify([{
+        "id": s.id,
+        "name": s.name,
+        "country": s.country,
+        "currency": s.currency,
+        "xml_feed_url": s.xml_feed_url,
+        "is_auto_sync": s.is_auto_sync,
+        "last_synced_at": s.last_synced_at.isoformat() if s.last_synced_at else None,
+        "sync_status": s.sync_status,
+        "is_active": s.is_active,
+        "logo_url": s.logo_url
+    } for s in stores])
+
+@admin_bp.route("/stores", methods=["POST"])
+@admin_required
+def create_store():
+    data = request.json
+    if not data or not data.get("name"):
+        return jsonify({"success": False, "error": "Store name required"}), 400
+    
+    try:
+        from app.utils.normalizers import generate_slug
+        store_name = data.get("name")
+        store = Store(
+            name=store_name,
+            slug=generate_slug(store_name),
+            website=data.get("website", "#"),   # website is NOT NULL in schema
+            country=data.get("country", "Global"),
+            currency=data.get("currency", "SAR"),
+            xml_feed_url=data.get("xml_feed_url"),
+            is_auto_sync=data.get("is_auto_sync", False),
+            logo_url=data.get("logo_url")
+        )
+        db.session.add(store)
+        db.session.commit()
+        return jsonify({"success": True, "id": store.id})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 400
+
+@admin_bp.route("/stores/<int:id>", methods=["PUT"])
+@admin_required
+def update_store(id):
+    store = Store.query.get_or_404(id)
+    data = request.json
+    if not data:
+        return jsonify({"success": False, "error": "No data provided"}), 400
+    
+    store.name = data.get("name", store.name)
+    store.country = data.get("country", store.country)
+    store.currency = data.get("currency", store.currency)
+    store.xml_feed_url = data.get("xml_feed_url", store.xml_feed_url)
+    store.is_auto_sync = data.get("is_auto_sync", store.is_auto_sync)
+    store.logo_url = data.get("logo_url", store.logo_url)
+    store.is_active = data.get("is_active", store.is_active)
+    
+    try:
+        db.session.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 400
+
+@admin_bp.route("/stores/<int:id>/sync", methods=["POST"])
+@admin_required
+def trigger_store_sync(id):
+    # Check if store exists
+    store = Store.query.get_or_404(id)
+    if not store.xml_feed_url:
+        return jsonify({"success": False, "error": "Store has no XML Feed URL"}), 400
+        
+    from app.tasks import task_sync_store_feed
+    task_sync_store_feed.delay(id)
+    return jsonify({"success": True, "message": "Sync started in background"})
+
+@admin_bp.route("/stores/<int:id>/sync-logs", methods=["GET"])
+@admin_required
+def get_store_sync_logs(id):
+    from app.models import FeedSyncLog
+    logs = FeedSyncLog.query.filter_by(store_id=id).order_by(FeedSyncLog.started_at.desc()).limit(20).all()
+    return jsonify([{
+        "id": l.id,
+        "started_at": l.started_at.isoformat() if l.started_at else None,
+        "finished_at": l.finished_at.isoformat() if l.finished_at else None,
+        "status": l.status,
+        "total_found": l.total_found,
+        "new_added": l.new_added,
+        "updated": l.updated,
+        "deactivated": l.deactivated,
+        "error_msg": l.error_msg
+    } for l in logs])
+
+@admin_bp.route("/feeds/preview", methods=["POST"])
+@admin_required
+def preview_feed():
+    from app.services.admitad_service import AdmitadService
+    data = request.json
+    xml_url = data.get("xml_url") if data else None
+    
+    if not xml_url:
+        return jsonify({"success": False, "error": "URL required"}), 400
+    
+    try:
+        content = AdmitadService.fetch_feed(xml_url)
+        products = AdmitadService.parse_xml(content)
+        # Return summary and small preview
+        return jsonify({
+            "success": True, 
+            "total_count": len(products),
+            "preview": products[:10]
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+

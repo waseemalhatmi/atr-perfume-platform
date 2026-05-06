@@ -74,6 +74,7 @@ export interface Item {
   view_count: number
   click_count: number
   min_price: number
+  store_count: number
   currency: string
   // Full detail only
   variants?: Variant[]
@@ -307,9 +308,67 @@ export const readAllNotifications = async () => {
 }
 // TODO: connect this endpoint in future UI
 export const fetchAdminStats = async () => {
-  const res = await api.get('/admin/stats')
+  const res = await api.get('/api/admin/stats')
   return res.data
 }
+
+// ── Admin Store & Feed API ───────────────────────────────────────────────────
+
+export interface FeedSyncLog {
+  id: number
+  started_at: string | null
+  finished_at: string | null
+  status: string
+  total_found: number
+  new_added: number
+  updated: number
+  deactivated: number
+  error_msg: string | null
+}
+
+export interface StoreAdmin {
+  id: number
+  name: string
+  country: string
+  currency: string
+  xml_feed_url: string | null
+  is_auto_sync: boolean
+  last_synced_at: string | null
+  sync_status: string
+  is_active: boolean
+  logo_url: string | null
+}
+
+export const fetchAdminStores = async () => {
+  const res = await api.get<StoreAdmin[]>('/api/admin/stores')
+  return res.data
+}
+
+export const createAdminStore = async (data: Partial<StoreAdmin>) => {
+  const res = await api.post<{ success: boolean; id: number }>('/api/admin/stores', data)
+  return res.data
+}
+
+export const updateAdminStore = async (id: number, data: Partial<StoreAdmin>) => {
+  const res = await api.put<{ success: boolean }>(`/api/admin/stores/${id}`, data)
+  return res.data
+}
+
+export const syncAdminStore = async (id: number) => {
+  const res = await api.post<{ success: boolean; message: string }>(`/api/admin/stores/${id}/sync`)
+  return res.data
+}
+
+export const fetchAdminStoreSyncLogs = async (id: number) => {
+  const res = await api.get<FeedSyncLog[]>(`/api/admin/stores/${id}/sync-logs`)
+  return res.data
+}
+
+export const previewAdminFeed = async (xml_url: string) => {
+  const res = await api.post<{ success: boolean; total_count: number; preview: any[] }>('/api/admin/feeds/preview', { xml_url })
+  return res.data
+}
+
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

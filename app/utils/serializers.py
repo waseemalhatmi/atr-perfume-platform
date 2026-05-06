@@ -5,7 +5,12 @@ log = get_logger(__name__)
 def _serialize_store_link(link):
     return {
         "id": link.id,
-        "store": {"id": link.store.id, "name": link.store.name, "slug": link.store.slug},
+        "store": {
+            "id": link.store.id, 
+            "name": link.store.name, 
+            "slug": link.store.slug,
+            "logo_url": link.store.logo_url
+        },
         "price": float(link.price) if link.price else None,
         "old_price": float(link.old_price) if link.old_price else None,
         "currency": link.currency,
@@ -33,6 +38,7 @@ def _serialize_item(item, full=False):
         ]
         brand_data    = {"id": item.brand.id,    "name": item.brand.name,    "slug": item.brand.slug}    if item.brand    else {"id": 0, "name": "Unknown", "slug": "unknown"}
         category_data = {"id": item.category.id, "name": item.category.name, "slug": item.category.slug} if item.category else {"id": 0, "name": "Unknown", "slug": "unknown"}
+
         base = {
             "id":          item.id,
             "name":        item.name,
@@ -45,8 +51,14 @@ def _serialize_item(item, full=False):
             "click_count": item.click_count,
             "min_price":   float(getattr(item, 'min_price_sql', None) or 0),
             "currency":    getattr(item, 'currency_sql', None) or "SAR",
+            "store_count": 0,  # populated below when full=True (avoids N+1 on list)
         }
         if full:
+            # Count active store links (variants already loaded via selectinload)
+            store_count = sum(
+                1 for v in item.variants for l in v.store_links if l.is_active
+            )
+            base["store_count"] = store_count
             base.update({
                 "variants":         [_serialize_variant(v) for v in item.variants],
                 "specs":            item.full_details,

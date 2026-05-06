@@ -225,37 +225,47 @@ export default function ItemDetailPage() {
           أفضل العروض المتاحة
         </h2>
         <div className="flex flex-col gap-4">
-          {item.variants?.[0]?.store_links.map((link) => (
-            <div key={link.id} className="glass p-6 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6 hover:border-primary/40 transition-all group">
-              <div className="flex items-center gap-6 w-full md:w-auto">
-                <div className="w-16 h-16 rounded-2xl bg-secondary flex items-center justify-center font-black text-xl">
-                  {link.store.name.charAt(0)}
+          {item.variants?.[0]?.store_links.map((link) => {
+            const savings = (link.old_price && link.price) ? Math.round(((link.old_price - link.price) / link.old_price) * 100) : 0;
+            return (
+              <div key={link.id} className="glass p-6 rounded-3xl flex flex-col md:flex-row items-center justify-between gap-6 hover:border-primary/40 transition-all group">
+                <div className="flex items-center gap-6 w-full md:w-auto">
+                  <div className="w-16 h-16 rounded-2xl bg-secondary flex items-center justify-center overflow-hidden border border-border/30">
+                    {link.store.logo_url ? (
+                      <img src={link.store.logo_url} alt={link.store.name} className="w-full h-full object-contain p-2" />
+                    ) : (
+                      <span className="font-black text-xl">{link.store.name.charAt(0)}</span>
+                    )}
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-lg">{link.store.name}</h4>
+                    <p className="text-xs text-green-500 font-bold flex items-center gap-1">
+                      <ShieldCheck size={12} /> {link.availability || 'متوفر في المخزون'}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="font-bold text-lg">{link.store.name}</h4>
-                  <p className="text-xs text-green-500 font-bold flex items-center gap-1">
-                    <ShieldCheck size={12} /> متوفر في المخزون
-                  </p>
+                
+                <div className="flex items-center gap-8 w-full md:w-auto justify-between md:justify-end">
+                  <div className="text-right">
+                    {savings > 0 && (
+                      <span className="text-[10px] bg-red-500 text-white px-2 py-0.5 rounded-full font-bold ml-2">وفر {savings}%</span>
+                    )}
+                    {link.old_price && (
+                      <p className="text-xs text-muted-foreground line-through inline-block">{link.old_price} {link.currency}</p>
+                    )}
+                    <p className="text-2xl font-bold luxury-text">{link.price} {link.currency}</p>
+                  </div>
+                  <button 
+                    onClick={() => handleBuy(link.id, link.affiliate_url)}
+                    className="btn-gold !py-3 !px-8 flex items-center gap-2 group"
+                  >
+                    اشتري من {link.store.name}
+                    <ExternalLink size={16} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                  </button>
                 </div>
               </div>
-              
-              <div className="flex items-center gap-8 w-full md:w-auto justify-between md:justify-end">
-                <div className="text-right">
-                  {link.old_price && (
-                    <p className="text-xs text-muted-foreground line-through">{link.old_price} {link.currency}</p>
-                  )}
-                  <p className="text-2xl font-bold luxury-text">{link.price} {link.currency}</p>
-                </div>
-                <button 
-                  onClick={() => handleBuy(link.id, link.affiliate_url)}
-                  className="btn-gold !py-3 !px-8 flex items-center gap-2 group"
-                >
-                  تسوق الآن
-                  <ExternalLink size={16} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 

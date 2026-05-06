@@ -44,11 +44,38 @@ class Store(db.Model, ActiveSortMixin):
     currency          = db.Column(db.String(10))
     affiliate_network = db.Column(db.String(100))
     created_at        = db.Column(db.DateTime, server_default=db.func.now())
+    
+    # XML Feed Integration fields
+    xml_feed_url      = db.Column(db.Text, nullable=True)
+    feed_format       = db.Column(db.String(20), default='xml') # xml / json
+    is_auto_sync      = db.Column(db.Boolean, default=False)
+    last_synced_at    = db.Column(db.DateTime, nullable=True)
+    sync_status       = db.Column(db.String(30), default='idle') # idle / running / error / success
+    logo_url          = db.Column(db.Text, nullable=True)
+
     item_links = db.relationship(
         "ItemStoreLink",
         back_populates="store",
         cascade="all, delete-orphan"
     )
+
+class FeedSyncLog(db.Model):
+    __tablename__ = "feed_sync_logs"
+    id           = db.Column(db.Integer, primary_key=True)
+    store_id     = db.Column(db.Integer, db.ForeignKey("stores.id", ondelete="CASCADE"), nullable=False)
+    started_at   = db.Column(db.DateTime, default=datetime.utcnow)
+    finished_at  = db.Column(db.DateTime, nullable=True)
+    status       = db.Column(db.String(20))  # success / error / partial
+    total_found  = db.Column(db.Integer, default=0)   # كم منتج في الرابط
+    new_added    = db.Column(db.Integer, default=0)   # كم منتج جديد أُضيف
+    updated      = db.Column(db.Integer, default=0)   # كم منتج تم تحديث سعره
+    deactivated  = db.Column(db.Integer, default=0)   # كم منتج أُخفي (اختفى من الرابط)
+    error_msg    = db.Column(db.Text, nullable=True)  # رسالة الخطأ إن وجدت
+
+    store        = db.relationship("Store", backref=db.backref("sync_logs", cascade="all, delete-orphan", lazy="dynamic"))
+
+    def __repr__(self):
+        return f"<FeedSyncLog Store:{self.store_id} Status:{self.status}>"
 
 class Item(db.Model):
     __tablename__ = "items"
@@ -59,6 +86,7 @@ class Item(db.Model):
     meta_description = db.Column(db.String(255), nullable=True) # SEO
     
     item_type = db.Column(db.String(50), nullable=True, default='perfume')
+    ean_code = db.Column(db.String(50), nullable=True, index=True) # Barcode / EAN-13
     category_id = db.Column(db.Integer, db.ForeignKey("categories.id"), nullable=False)
     brand_id = db.Column(db.Integer, db.ForeignKey("brands.id"), nullable=False)
     created_at = db.Column(
@@ -299,6 +327,8 @@ class ItemStoreLink(db.Model):
     availability = db.Column(db.String(32), index=True)
     last_checked_at = db.Column(db.DateTime)
     is_active = db.Column(db.Boolean, default=True)
+    source = db.Column(db.String(20), default='manual')  # manual / auto_feed
+    imported_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, server_default=db.func.now())
     variant = db.relationship("ItemVariant", back_populates="store_links")
     store = db.relationship("Store", back_populates="item_links")

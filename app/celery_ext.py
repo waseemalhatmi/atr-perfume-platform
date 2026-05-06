@@ -55,6 +55,18 @@ def init_celery(app: Flask):
             "schedule": crontab(hour=3, minute=0),
             "kwargs":   {"retention_days": 90, "batch_size": 1000},
         },
+        "nightly-sync-all-feeds": {
+            "task":     "tasks.sync_all_feeds",
+            "schedule": crontab(hour=2, minute=0),  # 2:00 AM UTC
+        },
+        "record-daily-prices": {
+            "task":     "tasks.record_daily_prices",
+            "schedule": crontab(hour=4, minute=0),  # 4:00 AM UTC
+        },
+        "nightly-download-images": {
+            "task":     "tasks.download_remote_images",
+            "schedule": crontab(hour=5, minute=0),  # 5:00 AM UTC
+        },
     }
 
     return celery_app
