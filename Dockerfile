@@ -21,12 +21,11 @@ LABEL stage="frontend-builder"
 WORKDIR /build/frontend
 
 # ── Copy package files first (leverages Docker layer caching) ─────────────────
-# If package.json/package-lock.json haven't changed, Docker skips npm install
-# and uses the cached layer. This makes rebuilds much faster.
 COPY frontend/package*.json ./
 
-# Install dependencies (using npm install instead of ci to fix cross-OS optional binding issues like Rolldown for Linux)
-RUN npm install
+# Force removal of Windows-generated package-lock.json to bypass npm optional binding bugs
+# This ensures that Linux-specific bindings (like @rolldown/binding-linux-x64-gnu) are downloaded.
+RUN rm -f package-lock.json && npm install
 
 # ── Copy the rest of the frontend source ─────────────────────────────────────
 COPY frontend/ ./
