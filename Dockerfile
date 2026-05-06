@@ -25,8 +25,8 @@ WORKDIR /build/frontend
 # and uses the cached layer. This makes rebuilds much faster.
 COPY frontend/package*.json ./
 
-# Install ALL dependencies (including devDependencies needed for Vite build)
-RUN npm ci --silent
+# Install dependencies (using npm install instead of ci to fix cross-OS optional binding issues like Rolldown for Linux)
+RUN npm install
 
 # ── Copy the rest of the frontend source ─────────────────────────────────────
 COPY frontend/ ./
