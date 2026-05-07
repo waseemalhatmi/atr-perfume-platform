@@ -12,31 +12,31 @@ from app.utils.normalizers import generate_slug
 log = get_logger(__name__)
 
 # --- 🌟 القاموس العطري الاحترافي (Whitelist) 🌟 ---
+# نركز هنا فقط على الكلمات التي تدل يقيناً على وجود "عطر" سائل أو بخور
 WHITELIST_PERFUME = [
-    # المصطلحات الأساسية
     'perfume', 'fragrance', 'cologne', 'parfum', 'scent', 'attar', 'oud', 'musk',
-    # تراكيز العطور
     'eau de parfum', 'edp', 'eau de toilette', 'edt', 'extrait de parfum', 'absolu',
     'concentrated', 'intense', 'vaporisateur', 'natural spray',
-    # أنواع المنتجات العطرية
     'body mist', 'body spray', 'fragrance oil', 'essential oil', 'aftershave',
     'incense', 'bakhoor', 'frankincense', 'resin', 'perfume oil',
-    # روائح مشهورة (لزيادة الدقة)
-    'amber', 'vanilla', 'jasmine', 'patchouli', 'sandalwood', 'rose', 'floral', 
-    'oriental', 'woody', 'citrus', 'musky',
-    # بالعربية
     'عطر', 'بخور', 'مسك', 'عود', 'دهن', 'مرش', 'فواحة', 'طيب', 'تستر عطر'
 ]
 
-# --- 🚫 قائمة الممنوعات التقنية (Blacklist) 🚫 ---
+# --- 🚫 قائمة الممنوعات الشاملة (Blacklist) 🚫 ---
+# استبعاد كل ما هو ليس عطراً سلفاً (إلكترونيات، ديكور، ملابس، أدوات)
 BLACKLIST_ITEMS = [
-    # إلكترونيات وأجهزة
+    # أجهزة وإلكترونيات
     'lcd', 'screen', 'fan', 'refrigerator', 'battery', 'voltage', 'car', 'automobile', 
     'electronics', 'tool', 'meter', 'cable', 'adapter', 'phone', 'charger', 'module', 
     'relay', 'sensor', 'board', 'circuit', 'vacuum', 'machine', 'motor', 'tester tool',
+    'humidifier', 'diffuser machine', 'dispenser', 'intelligent', 'thermostatic',
+    # ديكور وأدوات منزلية (فخ المباخر والمزهريات)
+    'burner', 'holder', 'stand', 'rack', 'vase', 'pot', 'kettle', 'decor', 'ornament', 
+    'statue', 'sculpture', 'handmade', 'wooden', 'metal', 'ceramic', 'glass', 'frame', 
+    'poster', 'sticker', 'hook', 'base', 'tray', 'box only', 'empty bottle',
     # ملابس وإكسسوارات
     't-shirt', 'shirt', 'clothing', 'shoes', 'pants', 'jacket', 'hat', 'bag', 'wallet', 
-    'watch', 'jewelry', 'toy', 'doll',
+    'watch', 'jewelry', 'toy', 'doll', 'vest', 'knitted', 'floral print', 'floral pattern',
     # قطع غيار وإصلاح
     'case for', 'cover for', 'kit for', 'replacement', 'repair', 'part', 'connector', 
     'plug', 'switch', 'socket', 'bulb', 'led', 'lamp', 'tempered glass'
