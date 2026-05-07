@@ -214,7 +214,7 @@ class AdmitadService:
                         
                         elem.clear()
                     
-                    if new_added >= 500:
+                    if new_added >= 2000:
                         log.info("trial_limit_reached", count=new_added)
                         break
 
