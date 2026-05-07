@@ -146,6 +146,11 @@ class AdmitadService:
                                 AdmitadService._create_new_item(store, p_data)
                             new_added += 1
 
+                        # --- TRIAL LIMIT: Stop after 500 perfumes for testing ---
+                        if new_added >= 500:
+                            log.info("trial_limit_reached", limit=500)
+                            break
+
                         # Batch Commit every 100 items to save RAM and DB load
                         if (new_added + updated) % 100 == 0:
                             db.session.commit()
@@ -155,10 +160,9 @@ class AdmitadService:
                     
                     # IMPORTANT: Clear the element from memory after processing
                     elem.clear()
-            
-            # Clear root element memory
-            # Note: iterparse doesn't clear previous elements automatically
-            # but clearing root helps for long files
+                
+                if new_added >= 500:
+                    break
             
             # --- PHASE 3: DEACTIVATION & FINAL LOGS ---
             # Deactivate products no longer in the feed
