@@ -1,8 +1,4 @@
-# app/services/admitad_service.py
-import requests
-import xml.etree.ElementTree as ET
-from datetime import datetime
-from difflib import SequenceMatcher
+import re
 from app.extensions import db
 from app.models import Store, Item, ItemVariant, ItemStoreLink, FeedSyncLog, Brand, Category
 from app.utils.logger import get_logger
@@ -10,6 +6,16 @@ from app.utils.resilience import retry, feed_circuit_breaker
 from app.utils.normalizers import generate_slug
 
 log = get_logger(__name__)
+
+# --- Smart Filter Keywords ---
+PERFUME_KEYWORDS = [
+    # English
+    'perfume', 'fragrance', 'cologne', 'eau de parfum', 'edp', 'eau de toilette', 'edt', 
+    'attar', 'scent', 'mist', 'oud', 'musk', 'essential oil', 'tester', 'parfum',
+    # Arabic
+    'عطر', 'بخور', 'مسك', 'عود', 'دهن', 'مرش', 'تستر', 'فواحة', 'طيب'
+]
+RE_PERFUME = re.compile('|'.join(PERFUME_KEYWORDS), re.IGNORECASE)
 
 class AdmitadService:
     """
@@ -23,44 +29,58 @@ class AdmitadService:
     def fetch_feed(url: str) -> str:
         """
         Fetches XML from URL with retry logic and circuit breaker.
+        Increased timeout to 60s for large files.
         """
         log.info("fetching_xml_feed", url=url)
-        response = requests.get(url, timeout=30)
+        # Use a longer timeout for large feeds (60 seconds)
+        response = requests.get(url, timeout=60, stream=True)
         response.raise_for_status()
+        
+        # We read the content in chunks if it's very large, but for now text is okay
         return response.text
 
     @staticmethod
     def parse_xml(content):
         """
-        Parses Admitad XML (YML/Standard format) into a list of clean dictionaries.
+        Parses Admitad XML into a list of clean dictionaries.
+        Includes a high-speed 'Smart Filter' to keep only perfume-related items.
         """
         products = []
         try:
-            # Note: We use ET.fromstring for moderate sized feeds. 
-            # For massive feeds (>100MB), ET.iterparse would be better.
             root = ET.fromstring(content)
-            
-            # Admitad feeds usually follow the YML format (offers -> offer)
             offers = root.findall(".//offer")
+            
+            log.info("parsing_xml_started", total_offers=len(offers))
+            
             for offer in offers:
                 try:
+                    name = offer.findtext("name", "").strip()
+                    description = offer.findtext("description", "").strip()
+                    
+                    # --- SMART FILTER: High-Speed Regex Check ---
+                    full_text = f"{name} {description}"
+                    if not RE_PERFUME.search(full_text):
+                        continue # Skip non-perfume items fast
+                        
                     product = {
                         "external_id":  offer.get("id"),
-                        "name":         offer.findtext("name", "").strip(),
+                        "name":         name,
                         "brand":        offer.findtext("vendor", "Generic").strip(),
                         "price":        float(offer.findtext("price") or 0),
                         "old_price":    float(offer.findtext("oldprice") or 0) if offer.findtext("oldprice") else None,
                         "currency":     offer.findtext("currencyId", "USD"),
                         "affiliate_url": offer.findtext("url", ""),
                         "image_url":     offer.findtext("picture", ""),
-                        "description":   offer.findtext("description", ""),
+                        "description":   description,
                         "availability":  "instock" if offer.get("available") == "true" else "outofstock",
                         "ean":           offer.findtext("barcode")
                     }
                     if product["name"] and product["external_id"]:
                         products.append(product)
-                except (ValueError, TypeError) as e:
-                    continue # Skip malformed products
+                except (ValueError, TypeError):
+                    continue
+            
+            log.info("parsing_xml_completed", filtered_count=len(products))
                     
         except ET.ParseError as e:
             log.error("xml_parsing_error", error=str(e))
@@ -103,22 +123,25 @@ class AdmitadService:
             updated = 0
             deactivated = 0
 
-            # Step 2: Intelligent Syncing
+            # Step 2: Intelligent Batch Syncing
+            # Optimization: Load all existing links for this store into memory at once
+            existing_links = {
+                l.external_item_id: l for l in ItemStoreLink.query.filter_by(store_id=store.id).all()
+            }
+            
             found_external_ids = set()
             for p in products:
                 found_external_ids.add(p["external_id"])
                 
-                # Logic 1: Match by External ID (Direct Link Update)
-                existing_link = ItemStoreLink.query.filter_by(
-                    store_id=store.id, 
-                    external_item_id=p["external_id"]
-                ).first()
+                # Logic 1: High-Speed Memory Match
+                existing_link = existing_links.get(p["external_id"])
 
                 if existing_link:
-                    # Price Tracking
-                    if float(existing_link.price or 0) != p["price"]:
+                    # Fast Price Tracking
+                    p_price = float(p["price"])
+                    if float(existing_link.price or 0) != p_price:
                         existing_link.old_price = existing_link.price
-                        existing_link.price = p["price"]
+                        existing_link.price = p_price
                         updated += 1
                     
                     existing_link.availability = p["availability"]
@@ -126,26 +149,24 @@ class AdmitadService:
                     existing_link.last_checked_at = datetime.utcnow()
                     continue
 
-                # Logic 2: Match by EAN Code (Cross-Store Match)
+                # Logic 2: Match by EAN Code (Database lookup only if not matched by ID)
                 item = None
                 if p.get("ean"):
                     item = Item.query.filter_by(ean_code=p["ean"]).first()
 
-                # Logic 3: Exact Name Match (Fall-back)
+                # Logic 3: Exact Name Match
                 if not item:
                     item = Item.query.filter(Item.name.ilike(p["name"])).first()
 
                 if item:
-                    # Add new store link to existing item
                     AdmitadService._add_link_to_item(item, store, p)
                     new_added += 1
                 else:
-                    # Logic 4: Create New Master Item
                     AdmitadService._create_new_item(store, p)
                     new_added += 1
                 
-                # Transaction Management: Commit batches of 50
-                if (new_added + updated) % 50 == 0:
+                # Periodic Commit to keep memory usage low
+                if (new_added + updated) % 100 == 0:
                     db.session.commit()
 
             # Logic 5: Deactivate missing products
