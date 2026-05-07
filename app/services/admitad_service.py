@@ -29,74 +29,21 @@ class AdmitadService:
     @staticmethod
     @retry(max_attempts=3, delay=2, backoff=2)
     @feed_circuit_breaker
-    def fetch_feed(url: str) -> str:
+    def fetch_feed_stream(url: str):
         """
-        Fetches XML from URL with retry logic and circuit breaker.
-        Increased timeout to 60s for large files.
+        Fetches XML from URL as a stream to handle massive files.
         """
-        log.info("fetching_xml_feed", url=url)
-        # Use a longer timeout for large feeds (60 seconds)
-        response = requests.get(url, timeout=60, stream=True)
+        log.info("fetching_xml_feed_stream", url=url)
+        # Use stream=True to avoid loading everything into RAM
+        response = requests.get(url, timeout=120, stream=True)
         response.raise_for_status()
-        
-        # We read the content in chunks if it's very large, but for now text is okay
-        return response.text
-
-    @staticmethod
-    def parse_xml(content):
-        """
-        Parses Admitad XML into a list of clean dictionaries.
-        Includes a high-speed 'Smart Filter' to keep only perfume-related items.
-        """
-        products = []
-        try:
-            root = ET.fromstring(content)
-            offers = root.findall(".//offer")
-            
-            log.info("parsing_xml_started", total_offers=len(offers))
-            
-            for offer in offers:
-                try:
-                    name = offer.findtext("name", "").strip()
-                    description = offer.findtext("description", "").strip()
-                    
-                    # --- SMART FILTER: High-Speed Regex Check ---
-                    full_text = f"{name} {description}"
-                    if not RE_PERFUME.search(full_text):
-                        continue # Skip non-perfume items fast
-                        
-                    product = {
-                        "external_id":  offer.get("id"),
-                        "name":         name,
-                        "brand":        offer.findtext("vendor", "Generic").strip(),
-                        "price":        float(offer.findtext("price") or 0),
-                        "old_price":    float(offer.findtext("oldprice") or 0) if offer.findtext("oldprice") else None,
-                        "currency":     offer.findtext("currencyId", "USD"),
-                        "affiliate_url": offer.findtext("url", ""),
-                        "image_url":     offer.findtext("picture", ""),
-                        "description":   description,
-                        "availability":  "instock" if offer.get("available") == "true" else "outofstock",
-                        "ean":           offer.findtext("barcode")
-                    }
-                    if product["name"] and product["external_id"]:
-                        products.append(product)
-                except (ValueError, TypeError):
-                    continue
-            
-            log.info("parsing_xml_completed", filtered_count=len(products))
-                    
-        except ET.ParseError as e:
-            log.error("xml_parsing_error", error=str(e))
-        
-        return products
+        return response.raw # Return the raw socket-like stream
 
     @staticmethod
     def sync_store_feed(store_id):
         """
-        Orchestrates the full sync process for a specific store.
-        1. Fetch & Parse
-        2. Match & Sync
-        3. Log Results
+        ULTRA-FAST STREAMING SYNC
+        Handles massive XML feeds (GBs) with constant low memory usage.
         """
         store = db.session.get(Store, store_id)
         if not store or not store.xml_feed_url:
@@ -107,73 +54,106 @@ class AdmitadService:
         sync_log = FeedSyncLog(
             store_id=store.id, 
             status="running",
-            started_at=datetime.utcnow()
+            started_at=datetime.utcnow(),
+            total_found=0
         )
         db.session.add(sync_log)
-        
         store.sync_status = "running"
         db.session.commit()
 
         try:
-            # Step 1: Data Acquisition
-            raw_content = AdmitadService.fetch_feed(store.xml_feed_url)
-            products = AdmitadService.parse_xml(raw_content)
-            
-            sync_log.total_found = len(products)
-            db.session.flush()
-
-            new_added = 0
-            updated = 0
-            deactivated = 0
-
-            # Step 2: Intelligent Batch Syncing
-            # Optimization: Load all existing links for this store into memory at once
+            # --- PHASE 1: PRE-FETCH (Speed Optimization) ---
+            # Load all existing external IDs for this store into a memory set
+            log.info("pre_fetching_ids", store_id=store.id)
             existing_links = {
                 l.external_item_id: l for l in ItemStoreLink.query.filter_by(store_id=store.id).all()
             }
             
+            # --- PHASE 2: STREAMING PROCESSING ---
+            stream = AdmitadService.fetch_feed_stream(store.xml_feed_url)
+            
+            new_added = 0
+            updated = 0
+            deactivated = 0
+            processed_count = 0
             found_external_ids = set()
-            for p in products:
-                found_external_ids.add(p["external_id"])
-                
-                # Logic 1: High-Speed Memory Match
-                existing_link = existing_links.get(p["external_id"])
 
-                if existing_link:
-                    # Fast Price Tracking
-                    p_price = float(p["price"])
-                    if float(existing_link.price or 0) != p_price:
-                        existing_link.old_price = existing_link.price
-                        existing_link.price = p_price
-                        updated += 1
+            # iterparse reads the file tag by tag without loading everything into memory
+            context = ET.iterparse(stream, events=("end",))
+            
+            log.info("streaming_parse_started")
+            
+            for event, elem in context:
+                if elem.tag == "offer":
+                    processed_count += 1
+                    try:
+                        name = elem.findtext("name", "").strip()
+                        description = elem.findtext("description", "").strip()
+                        
+                        # 1. SMART FILTER (Early Exit)
+                        full_text = f"{name} {description}"
+                        if not RE_PERFUME.search(full_text):
+                            elem.clear() # Free memory
+                            continue
+                        
+                        ext_id = elem.get("id")
+                        found_external_ids.add(ext_id)
+                        
+                        p_data = {
+                            "external_id": ext_id,
+                            "name": name,
+                            "brand": elem.findtext("vendor", "Generic").strip(),
+                            "price": float(elem.findtext("price") or 0),
+                            "old_price": float(elem.findtext("oldprice") or 0) if elem.findtext("oldprice") else None,
+                            "currency": elem.findtext("currencyId", "USD"),
+                            "affiliate_url": elem.findtext("url", ""),
+                            "image_url": elem.findtext("picture", ""),
+                            "description": description,
+                            "availability": "instock" if elem.get("available") == "true" else "outofstock",
+                            "ean": elem.findtext("barcode")
+                        }
+
+                        # 2. MATCH & UPDATE
+                        existing_link = existing_links.get(ext_id)
+                        if existing_link:
+                            # Update existing
+                            if float(existing_link.price or 0) != p_data["price"]:
+                                existing_link.old_price = existing_link.price
+                                existing_link.price = p_data["price"]
+                                updated += 1
+                            existing_link.availability = p_data["availability"]
+                            existing_link.is_active = (p_data["availability"] == "instock")
+                            existing_link.last_checked_at = datetime.utcnow()
+                        else:
+                            # Search for global item (EAN or Name)
+                            item = None
+                            if p_data.get("ean"):
+                                item = Item.query.filter_by(ean_code=p_data["ean"]).first()
+                            if not item:
+                                item = Item.query.filter(Item.name.ilike(p_data["name"])).first()
+                            
+                            if item:
+                                AdmitadService._add_link_to_item(item, store, p_data)
+                            else:
+                                AdmitadService._create_new_item(store, p_data)
+                            new_added += 1
+
+                        # Batch Commit every 100 items to save RAM and DB load
+                        if (new_added + updated) % 100 == 0:
+                            db.session.commit()
+
+                    except Exception as e:
+                        log.error("product_processing_error", error=str(e), product_name=name if 'name' in locals() else 'Unknown')
                     
-                    existing_link.availability = p["availability"]
-                    existing_link.is_active = (p["availability"] == "instock")
-                    existing_link.last_checked_at = datetime.utcnow()
-                    continue
-
-                # Logic 2: Match by EAN Code (Database lookup only if not matched by ID)
-                item = None
-                if p.get("ean"):
-                    item = Item.query.filter_by(ean_code=p["ean"]).first()
-
-                # Logic 3: Exact Name Match
-                if not item:
-                    item = Item.query.filter(Item.name.ilike(p["name"])).first()
-
-                if item:
-                    AdmitadService._add_link_to_item(item, store, p)
-                    new_added += 1
-                else:
-                    AdmitadService._create_new_item(store, p)
-                    new_added += 1
-                
-                # Periodic Commit to keep memory usage low
-                if (new_added + updated) % 100 == 0:
-                    db.session.commit()
-
-            # Logic 5: Deactivate missing products
-            # Products that are in DB for this store but NOT in the current XML
+                    # IMPORTANT: Clear the element from memory after processing
+                    elem.clear()
+            
+            # Clear root element memory
+            # Note: iterparse doesn't clear previous elements automatically
+            # but clearing root helps for long files
+            
+            # --- PHASE 3: DEACTIVATION & FINAL LOGS ---
+            # Deactivate products no longer in the feed
             missing_links = ItemStoreLink.query.filter(
                 ItemStoreLink.store_id == store.id,
                 ItemStoreLink.source == "auto_feed",
@@ -186,10 +166,10 @@ class AdmitadService:
                 m_link.availability = "outofstock"
                 deactivated += 1
 
-            # Step 3: Success Completion
             sync_log.new_added = new_added
             sync_log.updated = updated
             sync_log.deactivated = deactivated
+            sync_log.total_found = processed_count
             sync_log.status = "success"
             sync_log.finished_at = datetime.utcnow()
             
@@ -197,7 +177,7 @@ class AdmitadService:
             store.last_synced_at = datetime.utcnow()
             
             db.session.commit()
-            log.info("sync_completed", store_id=store_id, added=new_added, updated=updated)
+            log.info("sync_completed", added=new_added, updated=updated, processed=processed_count)
             return True, f"Sync successful: {new_added} added, {updated} updated."
 
         except Exception as e:
@@ -205,11 +185,9 @@ class AdmitadService:
             sync_log.status = "error"
             sync_log.error_msg = str(e)
             sync_log.finished_at = datetime.utcnow()
-            
             store.sync_status = "error"
             db.session.commit()
-            
-            log.error("sync_execution_failed", store_id=store_id, error=str(e))
+            log.error("sync_failed", error=str(e))
             return False, str(e)
 
     @staticmethod
