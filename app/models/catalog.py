@@ -52,6 +52,7 @@ class Store(db.Model, ActiveSortMixin):
     last_synced_at    = db.Column(db.DateTime, nullable=True)
     sync_status       = db.Column(db.String(30), default='idle') # idle / running / error / success
     logo_url          = db.Column(db.Text, nullable=True)
+    last_external_sync = db.Column(db.DateTime, nullable=True)
 
     item_links = db.relationship(
         "ItemStoreLink",

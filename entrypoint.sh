@@ -54,8 +54,10 @@ echo ""
 echo "⚙️  Starting Celery Worker in background..."
 celery -A main.celery_app worker --loglevel=info --concurrency=1 &
 
-echo "⏱️  Starting Celery Beat in background..."
-celery -A main.celery_app beat --loglevel=info &
+# NOTE: Celery Beat is disabled on Render to save RAM.
+# Automatic daily synchronizations are now handled professionally by GitHub Actions.
+# echo "⏱️  Starting Celery Beat in background..."
+# celery -A main.celery_app beat --loglevel=info &
 
 # ── 4. Start Gunicorn Production Server ──────────────────────────────────────
 echo "🌐 Starting Gunicorn..."
