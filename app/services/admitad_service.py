@@ -79,7 +79,7 @@ class AdmitadService:
         sync_log = FeedSyncLog(
             store_id=store.id, 
             status="running",
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(datetime.UTC),
             total_found=0
         )
         db.session.add(sync_log)
@@ -89,12 +89,13 @@ class AdmitadService:
         try:
             # --- PHASE 0: CLEANUP (Start Fresh) ---
             log.info("cleaning_old_data", store_id=store.id)
-            # Delete old store links
+            
+            # 1. Delete links for this store
             ItemStoreLink.query.filter_by(store_id=store.id).delete()
             
-            # Delete orphaned items (Master items with no links left - likely the old electronics)
-            # We filter by item_type to be safe, but cleaning orphans is generally good
-            orphans = Item.query.filter(~Item.links.any()).all()
+            # 2. Delete orphaned items (Items with no variants or variants with no links)
+            # This cleans up the misidentified electronics from previous runs
+            orphans = Item.query.filter(~Item.variants.any()).all()
             for o in orphans:
                 db.session.delete(o)
             
@@ -191,7 +192,7 @@ class AdmitadService:
                                     updated += 1
                                 existing_link.availability = p_data["availability"]
                                 existing_link.is_active = (p_data["availability"] == "instock")
-                                existing_link.last_checked_at = datetime.utcnow()
+                                existing_link.last_checked_at = datetime.now(datetime.UTC)
                             else:
                                 item = None
                                 if p_data.get("ean"):
@@ -242,10 +243,10 @@ class AdmitadService:
             sync_log.deactivated = deactivated
             sync_log.total_found = processed_count
             sync_log.status = "success"
-            sync_log.finished_at = datetime.utcnow()
+            sync_log.finished_at = datetime.now(datetime.UTC)
             
             store.sync_status = "success"
-            store.last_synced_at = datetime.utcnow()
+            store.last_synced_at = datetime.now(datetime.UTC)
             
             db.session.commit()
             log.info("sync_completed", added=new_added, updated=updated, processed=processed_count)
@@ -255,7 +256,7 @@ class AdmitadService:
             db.session.rollback()
             sync_log.status = "error"
             sync_log.error_msg = str(e)
-            sync_log.finished_at = datetime.utcnow()
+            sync_log.finished_at = datetime.now(datetime.UTC)
             store.sync_status = "error"
             db.session.commit()
             log.error("sync_failed", error=str(e))
@@ -278,8 +279,8 @@ class AdmitadService:
             availability=p_data["availability"],
             is_active=(p_data["availability"] == "instock"),
             source="auto_feed",
-            imported_at=datetime.utcnow(),
-            last_checked_at=datetime.utcnow()
+            imported_at=datetime.now(datetime.UTC),
+            last_checked_at=datetime.now(datetime.UTC)
         )
         db.session.add(new_link)
 
