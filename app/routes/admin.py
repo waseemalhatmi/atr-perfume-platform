@@ -577,7 +577,8 @@ def get_stores():
         "last_synced_at": s.last_synced_at.isoformat() if s.last_synced_at else None,
         "sync_status": s.sync_status,
         "is_active": s.is_active,
-        "logo_url": s.logo_url
+        "logo_url": s.logo_url,
+        "last_external_sync": s.last_external_sync.isoformat() if s.last_external_sync else None
     } for s in stores])
 
 @admin_bp.route("/stores", methods=["POST"])
