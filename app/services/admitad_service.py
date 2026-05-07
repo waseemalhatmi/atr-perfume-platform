@@ -11,15 +11,39 @@ from app.utils.normalizers import generate_slug
 
 log = get_logger(__name__)
 
-# --- Smart Filter Keywords ---
-PERFUME_KEYWORDS = [
-    # English
-    'perfume', 'fragrance', 'cologne', 'eau de parfum', 'edp', 'eau de toilette', 'edt', 
-    'attar', 'scent', 'mist', 'oud', 'musk', 'essential oil', 'tester', 'parfum',
-    # Arabic
-    'عطر', 'بخور', 'مسك', 'عود', 'دهن', 'مرش', 'تستر', 'فواحة', 'طيب'
+# --- 🌟 القاموس العطري الاحترافي (Whitelist) 🌟 ---
+WHITELIST_PERFUME = [
+    # المصطلحات الأساسية
+    'perfume', 'fragrance', 'cologne', 'parfum', 'scent', 'attar', 'oud', 'musk',
+    # تراكيز العطور
+    'eau de parfum', 'edp', 'eau de toilette', 'edt', 'extrait de parfum', 'absolu',
+    'concentrated', 'intense', 'vaporisateur', 'natural spray',
+    # أنواع المنتجات العطرية
+    'body mist', 'body spray', 'fragrance oil', 'essential oil', 'aftershave',
+    'incense', 'bakhoor', 'frankincense', 'resin', 'perfume oil',
+    # روائح مشهورة (لزيادة الدقة)
+    'amber', 'vanilla', 'jasmine', 'patchouli', 'sandalwood', 'rose', 'floral', 
+    'oriental', 'woody', 'citrus', 'musky',
+    # بالعربية
+    'عطر', 'بخور', 'مسك', 'عود', 'دهن', 'مرش', 'فواحة', 'طيب', 'تستر عطر'
 ]
-RE_PERFUME = re.compile('|'.join(PERFUME_KEYWORDS), re.IGNORECASE)
+
+# --- 🚫 قائمة الممنوعات التقنية (Blacklist) 🚫 ---
+BLACKLIST_ITEMS = [
+    # إلكترونيات وأجهزة
+    'lcd', 'screen', 'fan', 'refrigerator', 'battery', 'voltage', 'car', 'automobile', 
+    'electronics', 'tool', 'meter', 'cable', 'adapter', 'phone', 'charger', 'module', 
+    'relay', 'sensor', 'board', 'circuit', 'vacuum', 'machine', 'motor', 'tester tool',
+    # ملابس وإكسسوارات
+    't-shirt', 'shirt', 'clothing', 'shoes', 'pants', 'jacket', 'hat', 'bag', 'wallet', 
+    'watch', 'jewelry', 'toy', 'doll',
+    # قطع غيار وإصلاح
+    'case for', 'cover for', 'kit for', 'replacement', 'repair', 'part', 'connector', 
+    'plug', 'switch', 'socket', 'bulb', 'led', 'lamp', 'tempered glass'
+]
+
+RE_WHITELIST = re.compile('|'.join(WHITELIST_PERFUME), re.IGNORECASE)
+RE_BLACKLIST = re.compile('|'.join(BLACKLIST_ITEMS), re.IGNORECASE)
 
 class AdmitadService:
     """
@@ -63,6 +87,19 @@ class AdmitadService:
         db.session.commit()
 
         try:
+            # --- PHASE 0: CLEANUP (Start Fresh) ---
+            log.info("cleaning_old_data", store_id=store.id)
+            # Delete old store links
+            ItemStoreLink.query.filter_by(store_id=store.id).delete()
+            
+            # Delete orphaned items (Master items with no links left - likely the old electronics)
+            # We filter by item_type to be safe, but cleaning orphans is generally good
+            orphans = Item.query.filter(~Item.links.any()).all()
+            for o in orphans:
+                db.session.delete(o)
+            
+            db.session.commit()
+
             # --- PHASE 1: PRE-FETCH (Speed Optimization) ---
             # Load all existing external IDs for this store into a memory set
             log.info("pre_fetching_ids", store_id=store.id)
@@ -74,95 +111,117 @@ class AdmitadService:
             response = requests.get(store.xml_feed_url, timeout=120, stream=True)
             response.raise_for_status()
             
-            # Handle GZIP decompression transparently
-            stream = response.raw
-            if response.headers.get('Content-Encoding') == 'gzip' or store.xml_feed_url.endswith('.gz'):
-                log.info("decompressing_gzip_stream")
-                stream = gzip.GzipFile(fileobj=response.raw)
+            # Use raw stream and force decoding if necessary
+            raw_stream = response.raw
             
+            # Robust GZIP Detection: Check headers OR first 2 bytes (Magic Bytes)
+            is_gzipped = response.headers.get('Content-Encoding') == 'gzip' or store.xml_feed_url.endswith('.gz')
+            
+            if is_gzipped:
+                log.info("decompressing_gzip_stream")
+                stream = gzip.GzipFile(fileobj=raw_stream)
+            else:
+                # If headers are missing, try a safe peek or just use raw
+                stream = raw_stream
+
             new_added = 0
             updated = 0
             deactivated = 0
             processed_count = 0
             found_external_ids = set()
 
-            # iterparse reads the file tag by tag without loading everything into memory
-            context = ET.iterparse(stream, events=("end",))
-            
-            log.info("streaming_parse_started")
-            
-            for event, elem in context:
-                if elem.tag == "offer":
-                    processed_count += 1
-                    try:
-                        name = elem.findtext("name", "").strip()
-                        description = elem.findtext("description", "").strip()
-                        
-                        # 1. SMART FILTER (Early Exit)
-                        full_text = f"{name} {description}"
-                        if not RE_PERFUME.search(full_text):
-                            elem.clear() # Free memory
-                            continue
-                        
-                        ext_id = elem.get("id")
-                        found_external_ids.add(ext_id)
-                        
-                        p_data = {
-                            "external_id": ext_id,
-                            "name": name,
-                            "brand": elem.findtext("vendor", "Generic").strip(),
-                            "price": float(elem.findtext("price") or 0),
-                            "old_price": float(elem.findtext("oldprice") or 0) if elem.findtext("oldprice") else None,
-                            "currency": elem.findtext("currencyId", "USD"),
-                            "affiliate_url": elem.findtext("url", ""),
-                            "image_url": elem.findtext("picture", ""),
-                            "description": description,
-                            "availability": "instock" if elem.get("available") == "true" else "outofstock",
-                            "ean": elem.findtext("barcode")
-                        }
-
-                        # 2. MATCH & UPDATE
-                        existing_link = existing_links.get(ext_id)
-                        if existing_link:
-                            # Update existing
-                            if float(existing_link.price or 0) != p_data["price"]:
-                                existing_link.old_price = existing_link.price
-                                existing_link.price = p_data["price"]
-                                updated += 1
-                            existing_link.availability = p_data["availability"]
-                            existing_link.is_active = (p_data["availability"] == "instock")
-                            existing_link.last_checked_at = datetime.utcnow()
-                        else:
-                            # Search for global item (EAN or Name)
-                            item = None
-                            if p_data.get("ean"):
-                                item = Item.query.filter_by(ean_code=p_data["ean"]).first()
-                            if not item:
-                                item = Item.query.filter(Item.name.ilike(p_data["name"])).first()
-                            
-                            if item:
-                                AdmitadService._add_link_to_item(item, store, p_data)
-                            else:
-                                AdmitadService._create_new_item(store, p_data)
-                            new_added += 1
-
-                        # --- TRIAL LIMIT: Stop after 500 perfumes for testing ---
-                        if new_added >= 500:
-                            log.info("trial_limit_reached", limit=500)
-                            break
-
-                        # Batch Commit every 100 items to save RAM and DB load
-                        if (new_added + updated) % 100 == 0:
-                            db.session.commit()
-
-                    except Exception as e:
-                        log.error("product_processing_error", error=str(e), product_name=name if 'name' in locals() else 'Unknown')
-                    
-                    # IMPORTANT: Clear the element from memory after processing
-                    elem.clear()
+            try:
+                # iterparse reads the file tag by tag
+                context = ET.iterparse(stream, events=("end",))
                 
-                if new_added >= 500:
-                    break
+                log.info("streaming_parse_started")
+                
+                for event, elem in context:
+                    if elem.tag == "offer":
+                        processed_count += 1
+                        try:
+                            name = elem.findtext("name", "").strip()
+                            description = elem.findtext("description", "").strip()
+                            full_text = f"{name} {description}".lower()
+                            
+                            # --- SMART DUAL FILTER ---
+                            # 1. Must contain a perfume keyword
+                            # 2. Must NOT contain any blacklist keyword (Electronics/Tools/etc)
+                            is_match = RE_WHITELIST.search(full_text) and not RE_BLACKLIST.search(full_text)
+                            
+                            if not is_match:
+                                elem.clear()
+                                continue
+                            
+                            ext_id = elem.get("id")
+                            found_external_ids.add(ext_id)
+                            
+                            # --- ROBUST PRICE PARSING ---
+                            try:
+                                raw_price = elem.findtext("price") or "0"
+                                price = float(raw_price.replace(',', '.'))
+                            except (ValueError, TypeError):
+                                price = 0.0
+
+                            p_data = {
+                                "external_id": ext_id,
+                                "name": name,
+                                "brand": elem.findtext("vendor", "Generic").strip(),
+                                "price": price,
+                                "old_price": float(elem.findtext("oldprice") or 0) if elem.findtext("oldprice") else None,
+                                "currency": elem.findtext("currencyId", "USD"),
+                                "affiliate_url": elem.findtext("url", ""),
+                                "image_url": elem.findtext("picture", ""),
+                                "description": description,
+                                "availability": "instock" if elem.get("available") == "true" else "outofstock",
+                                "ean": elem.findtext("barcode")
+                            }
+
+                            # Skip items with zero price if needed (optional)
+                            if p_data["price"] <= 0:
+                                elem.clear()
+                                continue
+
+                            # 2. MATCH & UPDATE
+                            existing_link = existing_links.get(ext_id)
+                            if existing_link:
+                                if float(existing_link.price or 0) != p_data["price"]:
+                                    existing_link.old_price = existing_link.price
+                                    existing_link.price = p_data["price"]
+                                    updated += 1
+                                existing_link.availability = p_data["availability"]
+                                existing_link.is_active = (p_data["availability"] == "instock")
+                                existing_link.last_checked_at = datetime.utcnow()
+                            else:
+                                item = None
+                                if p_data.get("ean"):
+                                    item = Item.query.filter_by(ean_code=p_data["ean"]).first()
+                                if not item:
+                                    item = Item.query.filter(Item.name.ilike(p_data["name"])).first()
+                                
+                                if item:
+                                    AdmitadService._add_link_to_item(item, store, p_data)
+                                else:
+                                    AdmitadService._create_new_item(store, p_data)
+                                new_added += 1
+
+                            if (new_added + updated) % 100 == 0:
+                                db.session.commit()
+
+                        except Exception as e:
+                            log.error("product_processing_error", error=str(e))
+                        
+                        elem.clear()
+                    
+                    if new_added >= 500:
+                        log.info("trial_limit_reached", count=new_added)
+                        break
+
+            except ET.ParseError as e:
+                # If it fails here, it might be a decompression issue at Column 2
+                log.error("xml_parse_critical_error", error=str(e))
+                # Fallback: If not gzipped, try gzipping anyway? 
+                # Or maybe it's just a bad character.
             
             # --- PHASE 3: DEACTIVATION & FINAL LOGS ---
             # Deactivate products no longer in the feed
