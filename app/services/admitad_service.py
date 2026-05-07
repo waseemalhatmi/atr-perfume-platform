@@ -2,7 +2,7 @@ import re
 import requests
 import gzip
 import xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import datetime, timezone
 from app.extensions import db
 from app.models import Store, Item, ItemVariant, ItemStoreLink, FeedSyncLog, Brand, Category
 from app.utils.logger import get_logger
@@ -79,7 +79,7 @@ class AdmitadService:
         sync_log = FeedSyncLog(
             store_id=store.id, 
             status="running",
-            started_at=datetime.now(datetime.UTC),
+            started_at=datetime.now(timezone.utc),
             total_found=0
         )
         db.session.add(sync_log)
@@ -192,7 +192,7 @@ class AdmitadService:
                                     updated += 1
                                 existing_link.availability = p_data["availability"]
                                 existing_link.is_active = (p_data["availability"] == "instock")
-                                existing_link.last_checked_at = datetime.now(datetime.UTC)
+                                existing_link.last_checked_at = datetime.now(timezone.utc)
                             else:
                                 item = None
                                 if p_data.get("ean"):
@@ -243,10 +243,10 @@ class AdmitadService:
             sync_log.deactivated = deactivated
             sync_log.total_found = processed_count
             sync_log.status = "success"
-            sync_log.finished_at = datetime.now(datetime.UTC)
+            sync_log.finished_at = datetime.now(timezone.utc)
             
             store.sync_status = "success"
-            store.last_synced_at = datetime.now(datetime.UTC)
+            store.last_synced_at = datetime.now(timezone.utc)
             
             db.session.commit()
             log.info("sync_completed", added=new_added, updated=updated, processed=processed_count)
@@ -256,7 +256,7 @@ class AdmitadService:
             db.session.rollback()
             sync_log.status = "error"
             sync_log.error_msg = str(e)
-            sync_log.finished_at = datetime.now(datetime.UTC)
+            sync_log.finished_at = datetime.now(timezone.utc)
             store.sync_status = "error"
             db.session.commit()
             log.error("sync_failed", error=str(e))
@@ -279,8 +279,8 @@ class AdmitadService:
             availability=p_data["availability"],
             is_active=(p_data["availability"] == "instock"),
             source="auto_feed",
-            imported_at=datetime.now(datetime.UTC),
-            last_checked_at=datetime.now(datetime.UTC)
+            imported_at=datetime.now(timezone.utc),
+            last_checked_at=datetime.now(timezone.utc)
         )
         db.session.add(new_link)
 
