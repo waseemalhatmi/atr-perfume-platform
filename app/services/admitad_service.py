@@ -138,10 +138,14 @@ class AdmitadService:
                 log.info("streaming_parse_started")
                 
                 for event, elem in context:
-                    if elem.tag == "offer":
+                    # Get clean tag name without namespace (e.g., "{ns}offer" -> "offer")
+                    tag_name = elem.tag.split('}')[-1]
+                    
+                    if tag_name in ("offer", "product", "item"):
                         processed_count += 1
                         try:
-                            name = elem.findtext("name", "").strip()
+                            # Use title if name is not available (common in custom templates)
+                            name = (elem.findtext("name") or elem.findtext("title") or "").strip()
                             description = elem.findtext("description", "").strip()
                             full_text = f"{name} {description}".lower()
                             
@@ -150,7 +154,7 @@ class AdmitadService:
                             # 2. Must NOT contain any blacklist keyword (Electronics/Tools/etc)
                             is_match = RE_WHITELIST.search(full_text) and not RE_BLACKLIST.search(full_text)
                             
-                            if not is_match:
+                            if not is_match or not name:
                                 elem.clear()
                                 continue
                             
