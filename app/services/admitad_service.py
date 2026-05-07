@@ -1,5 +1,6 @@
 import re
 import requests
+import gzip
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from app.extensions import db
@@ -70,7 +71,14 @@ class AdmitadService:
             }
             
             # --- PHASE 2: STREAMING PROCESSING ---
-            stream = AdmitadService.fetch_feed_stream(store.xml_feed_url)
+            response = requests.get(store.xml_feed_url, timeout=120, stream=True)
+            response.raise_for_status()
+            
+            # Handle GZIP decompression transparently
+            stream = response.raw
+            if response.headers.get('Content-Encoding') == 'gzip' or store.xml_feed_url.endswith('.gz'):
+                log.info("decompressing_gzip_stream")
+                stream = gzip.GzipFile(fileobj=response.raw)
             
             new_added = 0
             updated = 0
