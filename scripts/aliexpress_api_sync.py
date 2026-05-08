@@ -102,7 +102,6 @@ def _build_signature(params: dict, secret: str) -> str:
 def fetch_products_from_api(keyword: str, page_index: int = 1) -> dict:
     """
     إرسال طلب بحث إلى AliExpress API وإرجاع البيانات.
-    يستخدم HMAC-SHA256 للتوقيع الأمني.
     """
     timestamp = str(int(time.time() * 1000))
 
@@ -110,19 +109,19 @@ def fetch_products_from_api(keyword: str, page_index: int = 1) -> dict:
         "app_key":    ALIEXPRESS_APP_KEY,
         "method":     "aliexpress.ds.text.search",
         "timestamp":  timestamp,
-        "sign_method":"sha256",
-        "access_token": ALIEXPRESS_TOKEN,
+        "sign_method": "md5",          # ✅ يجب أن يتطابق مع خوارزمية التوقيع
+        "session":    ALIEXPRESS_TOKEN, # ✅ AliExpress يستخدم 'session' وليس 'access_token'
         # معلمات البحث
         "keyWord":    keyword,
         "local":      FETCH_CONFIG["local"],
-        "countryCode":FETCH_CONFIG["countryCode"],
+        "countryCode": FETCH_CONFIG["countryCode"],
         "currency":   FETCH_CONFIG["currency"],
         "sortBy":     FETCH_CONFIG["sortBy"],
         "pageSize":   str(FETCH_CONFIG["pageSize"]),
         "pageIndex":  str(page_index),
     }
 
-    # توليد التوقيع
+    # توليد التوقيع (MD5)
     params["sign"] = _build_signature(params, ALIEXPRESS_SECRET)
 
     try:
@@ -131,14 +130,31 @@ def fetch_products_from_api(keyword: str, page_index: int = 1) -> dict:
             data=params,
             timeout=30
         )
-        response.raise_for_status()
-        return response.json()
+        raw = response.text
+
+        # ✅ تسجيل الرد الخام دائماً في أول طلب لكل كلمة مفتاحية
+        if page_index == 1:
+            log.info(f"   ↳ Raw API response (first 300 chars): {raw[:300]}")
+
+        data = response.json()
+
+        # ✅ كشف أخطاء AliExpress الصامتة
+        if "error_response" in data:
+            err = data["error_response"]
+            log.error(f"   ↳ API Error: code={err.get('code')} sub_code={err.get('sub_code')} msg={err.get('msg')}")
+            return {}
+
+        return data
+
     except requests.exceptions.RequestException as e:
         log.error(f"API request failed: {e}")
         return {}
+    except ValueError as e:
+        log.error(f"Failed to parse API JSON response: {e}")
+        return {}
 
 
-def extract_products(api_response: dict) -> list:
+def extract_products(api_response: dict) -> tuple:
     """
     استخراج قائمة المنتجات من استجابة الـ API بشكل آمن.
     """
@@ -148,11 +164,14 @@ def extract_products(api_response: dict) -> list:
             .get("aliexpress_ds_text_search_response", {})
             .get("data", {})
         )
+        if not data:
+            return [], 0
         products = data.get("products", {}).get("item_display_bean", [])
         if isinstance(products, dict):
             products = [products]
         return products, int(data.get("total_count", 0))
-    except (AttributeError, KeyError, TypeError):
+    except (AttributeError, KeyError, TypeError) as e:
+        log.warning(f"extract_products error: {e}")
         return [], 0
 
 
