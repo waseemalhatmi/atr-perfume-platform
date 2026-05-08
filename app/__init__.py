@@ -94,20 +94,13 @@ def create_app():
     )
 
     # ── Cache — Environment-Aware Selection ──────────────────────────────────
-    # Priority: Redis (always preferred) → NullCache (prod fallback) → FileSystemCache (dev only)
-    #
-    # WHY NOT FileSystemCache in production:
-    #   Gunicorn runs N worker processes. Each has its own isolated FS cache dir.
-    #   There is NO shared state between workers — cache misses explode, stale data
-    #   is served, and cache invalidation is completely broken.
-    #
-    # WHY NullCache in production without Redis:
-    #   Better to have no cache (slightly slower) than broken/inconsistent cache.
-    #   The app stays correct; operators are warned clearly in logs.
-    if app.config.get("REDIS_URL"):
+    _redis_url = app.config.get("REDIS_URL", "")
+    _is_real_redis = _redis_url.startswith(("redis://", "rediss://", "unix://"))
+
+    if _is_real_redis:
         cache_config = {
             "CACHE_TYPE":            "RedisCache",
-            "CACHE_REDIS_URL":       app.config["REDIS_URL"],
+            "CACHE_REDIS_URL":       _redis_url,
             "CACHE_DEFAULT_TIMEOUT": 3600,
         }
     elif _is_production:
@@ -119,13 +112,13 @@ def create_app():
         )
         cache_config = {"CACHE_TYPE": "NullCache"}
     else:
-        # Development only — single worker, ephemeral cache is acceptable
+        # Development or sync runner — single worker, ephemeral cache is acceptable
         cache_config = {
-            "CACHE_TYPE":            "FileSystemCache",
-            "CACHE_DIR":             os.path.join(app.instance_path, "cache"),
+            "CACHE_TYPE":            "SimpleCache",
             "CACHE_DEFAULT_TIMEOUT": 3600,
         }
     cache.init_app(app, config=cache_config)
+
 
     # ── Rate limiter ──────────────────────────────────────────────────────────
     limiter.init_app(app)
