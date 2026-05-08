@@ -2,80 +2,96 @@ name: AliExpress API Product Sync
 
 on:
   schedule:
-    # كل يوم الساعة 2:00 صباحاً (UTC) — قبل Admitad sync بساعة
+    # كل يوم الساعة 2:00 صباحاً (UTC)
     - cron: '0 2 * * *'
   workflow_dispatch:
-    # تشغيل يدوي من لوحة GitHub Actions في أي وقت
     inputs:
       dry_run:
         description: 'Dry run (log only, do not save to DB)'
         required: false
         default: 'false'
 
+# ── تعريف المتغيرات البيئية على مستوى الـ Job كله (تنطبق على جميع الخطوات) ──
+env:
+  DATABASE_URL:            ${{ secrets.DATABASE_URL }}
+  ALIEXPRESS_APP_KEY:      ${{ secrets.ALIEXPRESS_APP_KEY }}
+  ALIEXPRESS_APP_SECRET:   ${{ secrets.ALIEXPRESS_APP_SECRET }}
+  ALIEXPRESS_ACCESS_TOKEN: ${{ secrets.ALIEXPRESS_ACCESS_TOKEN }}
+  SECRET_KEY:              ${{ secrets.SECRET_KEY }}
+  FLASK_ENV:               "production"
+  HTTPS_ENABLED:           "True"
+  DRY_RUN:                 ${{ github.event.inputs.dry_run || 'false' }}
+
 jobs:
   aliexpress-api-sync:
-    name: 🛍️ AliExpress API → Supabase
+    name: "AliExpress API to Supabase"
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
     steps:
-      - name: 🛒 Checkout Repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 🐍 Set up Python 3.12
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: 'pip'
 
-      - name: 📦 Install Dependencies
+      - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-sync.txt
 
-      - name: 🔑 Verify Required Secrets
+      - name: Verify Required Secrets
         run: |
           echo "Checking required environment variables..."
-          if [ -z "$ALIEXPRESS_APP_KEY" ]; then
-            echo "❌ ERROR: ALIEXPRESS_APP_KEY is not set!"
-            exit 1
-          fi
-          if [ -z "$ALIEXPRESS_APP_SECRET" ]; then
-            echo "❌ ERROR: ALIEXPRESS_APP_SECRET is not set!"
-            exit 1
-          fi
-          if [ -z "$ALIEXPRESS_ACCESS_TOKEN" ]; then
-            echo "❌ ERROR: ALIEXPRESS_ACCESS_TOKEN is not set!"
-            exit 1
-          fi
-          if [ -z "$DATABASE_URL" ]; then
-            echo "❌ ERROR: DATABASE_URL (Supabase) is not set!"
-            exit 1
-          fi
-          echo "✅ All required secrets are present."
+          MISSING=0
 
-      - name: 🚀 Run AliExpress API Sync
-        env:
-          # ─── Supabase Database ───────────────────────────────────────────
-          DATABASE_URL:              ${{ secrets.DATABASE_URL }}
-          # ─── AliExpress API Credentials ─────────────────────────────────
-          ALIEXPRESS_APP_KEY:        ${{ secrets.ALIEXPRESS_APP_KEY }}
-          ALIEXPRESS_APP_SECRET:     ${{ secrets.ALIEXPRESS_APP_SECRET }}
-          ALIEXPRESS_ACCESS_TOKEN:   ${{ secrets.ALIEXPRESS_ACCESS_TOKEN }}
-          # ─── Flask App Settings ──────────────────────────────────────────
-          SECRET_KEY:                ${{ secrets.SECRET_KEY }}
-          FLASK_ENV:                 "production"
-          HTTPS_ENABLED:             "True"
-          # ─── Dry Run Option ──────────────────────────────────────────────
-          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          if [ -z "$ALIEXPRESS_APP_KEY" ]; then
+            echo "ERROR: ALIEXPRESS_APP_KEY is not set!"
+            MISSING=1
+          else
+            echo "OK: ALIEXPRESS_APP_KEY is set"
+          fi
+
+          if [ -z "$ALIEXPRESS_APP_SECRET" ]; then
+            echo "ERROR: ALIEXPRESS_APP_SECRET is not set!"
+            MISSING=1
+          else
+            echo "OK: ALIEXPRESS_APP_SECRET is set"
+          fi
+
+          if [ -z "$ALIEXPRESS_ACCESS_TOKEN" ]; then
+            echo "ERROR: ALIEXPRESS_ACCESS_TOKEN is not set!"
+            MISSING=1
+          else
+            echo "OK: ALIEXPRESS_ACCESS_TOKEN is set"
+          fi
+
+          if [ -z "$DATABASE_URL" ]; then
+            echo "ERROR: DATABASE_URL (Supabase) is not set!"
+            MISSING=1
+          else
+            echo "OK: DATABASE_URL is set"
+          fi
+
+          if [ "$MISSING" -eq 1 ]; then
+            echo "One or more required secrets are missing. Add them at:"
+            echo "https://github.com/waseemalhatmi/atr-perfume-platform/settings/secrets/actions"
+            exit 1
+          fi
+
+          echo "All required secrets are present. Proceeding..."
+
+      - name: Run AliExpress API Sync
         run: |
-          echo "▶️  Starting AliExpress API Sync..."
+          echo "Starting AliExpress API Sync..."
           python scripts/aliexpress_api_sync.py
 
-      - name: 📊 Report Results
+      - name: Report Results
         if: always()
         run: |
-          echo "══════════════════════════════════════"
-          echo "✅ Sync job completed."
-          echo "Check logs above for detailed results."
-          echo "══════════════════════════════════════"
+          echo "======================================"
+          echo "Sync job finished. Check logs above."
+          echo "======================================"
