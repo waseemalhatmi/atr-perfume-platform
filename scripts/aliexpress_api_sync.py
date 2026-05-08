@@ -87,15 +87,16 @@ def _is_perfume(title: str, category_id: str = "") -> bool:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _build_signature(params: dict, secret: str) -> str:
-    """بناء التوقيع الرقمي (HMAC-SHA256) المطلوب من AliExpress."""
-    sorted_params = sorted(params.items())
+    """
+    AliExpress Official MD5 Signing Algorithm:
+    1. Exclude the 'sign' field itself
+    2. Sort all remaining params alphabetically
+    3. secret + key1value1key2value2... + secret → MD5 uppercase
+    """
+    sign_params = {k: v for k, v in params.items() if k != "sign"}
+    sorted_params = sorted(sign_params.items())
     sign_string = secret + "".join(f"{k}{v}" for k, v in sorted_params) + secret
-    signature = hmac.new(
-        secret.encode("utf-8"),
-        sign_string.encode("utf-8"),
-        hashlib.sha256
-    ).hexdigest().upper()
-    return signature
+    return hashlib.md5(sign_string.encode("utf-8")).hexdigest().upper()
 
 
 def fetch_products_from_api(keyword: str, page_index: int = 1) -> dict:
