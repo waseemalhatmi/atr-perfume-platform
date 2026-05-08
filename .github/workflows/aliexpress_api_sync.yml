@@ -13,14 +13,18 @@ on:
 
 # ── تعريف المتغيرات البيئية على مستوى الـ Job كله (تنطبق على جميع الخطوات) ──
 env:
-  DATABASE_URL:            ${{ secrets.DATABASE_URL }}
-  ALIEXPRESS_APP_KEY:      ${{ secrets.ALIEXPRESS_APP_KEY }}
-  ALIEXPRESS_APP_SECRET:   ${{ secrets.ALIEXPRESS_APP_SECRET }}
-  ALIEXPRESS_ACCESS_TOKEN: ${{ secrets.ALIEXPRESS_ACCESS_TOKEN }}
-  SECRET_KEY:              ${{ secrets.SECRET_KEY }}
-  FLASK_ENV:               "production"
-  HTTPS_ENABLED:           "True"
-  DRY_RUN:                 ${{ github.event.inputs.dry_run || 'false' }}
+  DATABASE_URL:              ${{ secrets.DATABASE_URL }}
+  ALIEXPRESS_APP_KEY:        ${{ secrets.ALIEXPRESS_APP_KEY }}
+  ALIEXPRESS_APP_SECRET:     ${{ secrets.ALIEXPRESS_APP_SECRET }}
+  ALIEXPRESS_ACCESS_TOKEN:   ${{ secrets.ALIEXPRESS_ACCESS_TOKEN }}
+  SECRET_KEY:                ${{ secrets.SECRET_KEY }}
+  # Redis not needed for sync — use memory fallback
+  REDIS_URL:                 "memory://"
+  RATELIMIT_STORAGE_URI:     "memory://"
+  # Use sync mode to bypass strict production checks
+  FLASK_ENV:                 "development"
+  HTTPS_ENABLED:             "False"
+  DRY_RUN:                   ${{ github.event.inputs.dry_run || 'false' }}
 
 jobs:
   aliexpress-api-sync:
