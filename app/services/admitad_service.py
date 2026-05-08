@@ -44,6 +44,15 @@ BLACKLIST_ITEMS = [
 
 RE_WHITELIST = re.compile('|'.join(WHITELIST_PERFUME), re.IGNORECASE)
 RE_BLACKLIST = re.compile('|'.join(BLACKLIST_ITEMS), re.IGNORECASE)
+RE_VOLUME = re.compile(r'\d+\s*(ml|مل|oz|أوز|ounce)', re.IGNORECASE)
+
+# --- 🎯 نظام الأوزان الاحترافي (Weight System) 🎯 ---
+WEIGHTS = {
+    "critical_positive": ["eau de parfum", "edp", "eau de toilette", "edt", "extrait de parfum", "عطر", "بخور", "parfum"], # +20
+    "strong_positive": ["perfume", "fragrance", "cologne", "oud", "musk", "دهن", "مسك", "عود", "tester", "تستر"], # +10
+    "medium_positive": ["scent", "attar", "spray", "vaporisateur", "طيب", "مرش"], # +5
+    "negative": BLACKLIST_ITEMS # -50 (إقصاء فوري)
+}
 
 class AdmitadService:
     """
@@ -75,13 +84,12 @@ class AdmitadService:
             log.warning("sync_skipped", store_id=store_id, reason="No URL")
             return False, "Store not found or missing feed URL"
 
-        # Initialize Sync Log
-        sync_log = FeedSyncLog(
-            store_id=store.id, 
-            status="running",
-            started_at=datetime.now(timezone.utc),
-            total_found=0
-        )
+        # Initialize Sync Log (Safe Method to avoid constructor errors)
+        sync_log = FeedSyncLog()
+        sync_log.store_id = store.id
+        sync_log.status = "running"
+        sync_log.started_at = datetime.now(timezone.utc)
+        sync_log.total_found = 0
         db.session.add(sync_log)
         store.sync_status = "running"
         db.session.commit()
@@ -147,12 +155,38 @@ class AdmitadService:
                             # Use title if name is not available (common in custom templates)
                             name = (elem.findtext("name") or elem.findtext("title") or "").strip()
                             description = elem.findtext("description", "").strip()
-                            full_text = f"{name} {description}".lower()
+                            # جلب اسم التصنيف من ملف الـ XML لتعزيز دقة الفلترة
+                            category_text = elem.findtext("category", "") or elem.findtext("categoryId", "")
+                            full_text = f"{name} {description} {category_text}".lower()
                             
-                            # --- SMART DUAL FILTER ---
-                            # 1. Must contain a perfume keyword
-                            # 2. Must NOT contain any blacklist keyword (Electronics/Tools/etc)
-                            is_match = RE_WHITELIST.search(full_text) and not RE_BLACKLIST.search(full_text)
+                            # --- 🚀 نظام الأوزان الاحترافي (Professional Scoring) ---
+                            score = 0
+                            
+                            # 0. فحص التصنيف (إذا كان التصنيف يحتوي على كلمة عطر، نعطيه دفعة قوية)
+                            if any(w in category_text.lower() for w in ["perfume", "fragrance", "عطر", "جمال", "beauty"]):
+                                score += 20
+                            
+                            # 1. فحص الكلمات المفتاحية بأوزان مختلفة
+                            for word in WEIGHTS["critical_positive"]:
+                                if word in full_text: score += 25
+                            
+                            for word in WEIGHTS["strong_positive"]:
+                                if word in full_text: score += 15
+                                
+                            for word in WEIGHTS["medium_positive"]:
+                                if word in full_text: score += 5
+
+                            # 2. فحص الحجم (دليل قوي جداً على أنه عطر سائل)
+                            if RE_VOLUME.search(full_text):
+                                score += 20
+                                
+                            # 3. الخصم القوي للممنوعات (Blacklist)
+                            for word in WEIGHTS["negative"]:
+                                if word in full_text:
+                                    score -= 100 # إقصاء شبه مؤكد
+                            
+                            # 4. القرار النهائي (الحد الأدنى للقبول هو 20 نقطة)
+                            is_match = score >= 20
                             
                             if not is_match or not name:
                                 elem.clear()
@@ -218,9 +252,7 @@ class AdmitadService:
                         
                         elem.clear()
                     
-                    if new_added >= 2000:
-                        log.info("trial_limit_reached", count=new_added)
-                        break
+                    # تم فتح السحب لجميع المنتجات دون حد أقصى
 
             except ET.ParseError as e:
                 # If it fails here, it might be a decompression issue at Column 2
@@ -272,20 +304,21 @@ class AdmitadService:
         from app.services.item_service import ensure_default_variant
         variant = ensure_default_variant(item)
         
-        new_link = ItemStoreLink(
-            variant_id=variant.id,
-            store_id=store.id,
-            external_item_id=p_data["external_id"],
-            affiliate_url=p_data["affiliate_url"],
-            price=p_data["price"],
-            old_price=p_data["old_price"],
-            currency=p_data["currency"] or store.currency or "USD",
-            availability=p_data["availability"],
-            is_active=(p_data["availability"] == "instock"),
-            source="auto_feed",
-            imported_at=datetime.now(timezone.utc),
-            last_checked_at=datetime.now(timezone.utc)
-        )
+        # Safe Instantiation
+        new_link = ItemStoreLink()
+        new_link.variant_id = variant.id
+        new_link.store_id = store.id
+        new_link.external_item_id = p_data["external_id"]
+        new_link.affiliate_url = p_data["affiliate_url"]
+        new_link.price = p_data["price"]
+        new_link.old_price = p_data["old_price"]
+        new_link.currency = p_data["currency"] or store.currency or "USD"
+        new_link.availability = p_data["availability"]
+        new_link.is_active = (p_data["availability"] == "instock")
+        new_link.source = "auto_feed"
+        new_link.imported_at = datetime.now(timezone.utc)
+        new_link.last_checked_at = datetime.now(timezone.utc)
+        
         db.session.add(new_link)
 
     @staticmethod
@@ -297,14 +330,18 @@ class AdmitadService:
         brand_name = (p_data.get("brand") or "Generic").strip()
         brand = Brand.query.filter(Brand.name.ilike(brand_name)).first()
         if not brand:
-            brand = Brand(name=brand_name, slug=generate_slug(brand_name))
+            brand = Brand()
+            brand.name = brand_name
+            brand.slug = generate_slug(brand_name)
             db.session.add(brand)
             db.session.flush()
 
         # ── Category Management (Default to 'عطور' / Perfumes) ─────────────
         category = Category.query.filter(Category.name.ilike("عطور")).first()
         if not category:
-            category = Category(name="عطور", slug="perfumes")
+            category = Category()
+            category.name = "عطور"
+            category.slug = "perfumes"
             db.session.add(category)
             db.session.flush()
 
@@ -317,26 +354,26 @@ class AdmitadService:
             counter += 1
 
         # ── Create Item ──────────────────────────────────────────────────────
-        new_item = Item(
-            name=p_data["name"],
-            slug=slug,
-            description=p_data["description"][:1000] if p_data.get("description") else None,
-            brand_id=brand.id,
-            category_id=category.id,
-            ean_code=p_data.get("ean"),
-            item_type="perfume"
-        )
+        # Create Item (Safe Method)
+        new_item = Item()
+        new_item.name = p_data["name"]
+        new_item.slug = slug
+        new_item.description = p_data["description"][:1000] if p_data.get("description") else None
+        new_item.brand_id = brand.id
+        new_item.category_id = category.id
+        new_item.ean_code = p_data.get("ean")
+        new_item.item_type = "perfume"
+        
         db.session.add(new_item)
         db.session.flush()  # generate new_item.id before adding relations
 
         # ── Save product image (stored as external URL; Celery will proxy later) ──
         if p_data.get("image_url"):
-            img = ItemImage(
-                item_id=new_item.id,
-                image_path=p_data["image_url"],   # will be proxied to local by nightly task
-                alt_text=p_data["name"],
-                position=0
-            )
+            img = ItemImage()
+            img.item_id = new_item.id
+            img.image_path = p_data["image_url"]
+            img.alt_text = p_data["name"]
+            img.position = 0
             db.session.add(img)
 
         # ── Add initial store link ───────────────────────────────────────────
