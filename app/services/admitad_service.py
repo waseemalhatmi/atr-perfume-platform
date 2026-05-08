@@ -123,14 +123,21 @@ class AdmitadService:
             # Use raw stream and force decoding if necessary
             raw_stream = response.raw
             
-            # Robust GZIP Detection: Check headers OR first 2 bytes (Magic Bytes)
-            is_gzipped = response.headers.get('Content-Encoding') == 'gzip' or store.xml_feed_url.endswith('.gz')
-            
+            # Robust GZIP Detection: Check headers OR first 2 bytes (Magic Bytes: 1f 8b)
+            # This solves the 'invalid token' error if the feed is gzipped but the URL/headers don't say so.
+            try:
+                # Peek first two bytes
+                peek = raw_stream.peek(2)
+                is_gzipped = peek.startswith(b'\x1f\x8b') or store.xml_feed_url.endswith('.gz') or response.headers.get('Content-Encoding') == 'gzip'
+            except:
+                is_gzipped = store.xml_feed_url.endswith('.gz') or response.headers.get('Content-Encoding') == 'gzip'
+
             if is_gzipped:
                 log.info("decompressing_gzip_stream")
+                # Using zlib-compatible wrapper for raw streams
+                import io
                 stream = gzip.GzipFile(fileobj=raw_stream)
             else:
-                # If headers are missing, try a safe peek or just use raw
                 stream = raw_stream
 
             new_added = 0
@@ -245,9 +252,15 @@ class AdmitadService:
                                 new_added += 1
 
                             if (new_added + updated) % 100 == 0:
-                                db.session.commit()
+                                try:
+                                    db.session.commit()
+                                except Exception as commit_error:
+                                    db.session.rollback()
+                                    log.error("batch_commit_error", error=str(commit_error))
 
                         except Exception as e:
+                            # 💡 الإصلاح الجوهري: تنظيف الجلسة فوراً لضمان الاستمرارية
+                            db.session.rollback()
                             log.error("product_processing_error", error=str(e))
                         
                         elem.clear()
