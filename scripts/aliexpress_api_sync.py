@@ -32,10 +32,14 @@ logging.basicConfig(
 log = logging.getLogger("aliexpress_sync")
 
 # ── 2. إعدادات AliExpress API ─────────────────────────────────────────────────
-ALIEXPRESS_API_URL  = "https://api-sg.aliexpress.com/sync"
-ALIEXPRESS_APP_KEY  = os.environ.get("ALIEXPRESS_APP_KEY", "")
-ALIEXPRESS_SECRET   = os.environ.get("ALIEXPRESS_APP_SECRET", "")
-ALIEXPRESS_TOKEN    = os.environ.get("ALIEXPRESS_ACCESS_TOKEN", "")
+ALIEXPRESS_API_URL     = "https://api-sg.aliexpress.com/sync"
+ALIEXPRESS_APP_KEY     = os.environ.get("ALIEXPRESS_APP_KEY", "")
+ALIEXPRESS_SECRET      = os.environ.get("ALIEXPRESS_APP_SECRET", "")
+ALIEXPRESS_TOKEN       = os.environ.get("ALIEXPRESS_ACCESS_TOKEN", "")
+ALIEXPRESS_REFRESH_TOKEN = os.environ.get("ALIEXPRESS_REFRESH_TOKEN", "")
+
+# المتغير القابل للتحديث أثناء التشغيل
+_active_token: str = ALIEXPRESS_TOKEN
 
 # ── 3. كلمات البحث (يمكنك إضافة أي كلمة) ────────────────────────────────────
 PERFUME_KEYWORDS = [
@@ -99,26 +103,76 @@ def _build_signature(params: dict, secret: str) -> str:
     return hashlib.md5(sign_string.encode("utf-8")).hexdigest().upper()
 
 
-def fetch_products_from_api(keyword: str, page_index: int = 1) -> dict:
+def _refresh_access_token() -> str:
+    """
+    يجدد Access Token باستخدام Refresh Token المخزن في ALIEXPRESS_REFRESH_TOKEN.
+    يُستدعى تلقائياً عند استلام خطأ IllegalAccessToken من الـ API.
+    يُعيد التوكن الجديد إذا نجح، أو التوكن القديم إذا فشل.
+    """
+    global _active_token
+
+    if not ALIEXPRESS_REFRESH_TOKEN:
+        log.warning("⚠️  ALIEXPRESS_REFRESH_TOKEN غير مضبوط — لا يمكن تجديد التوكن تلقائياً.")
+        log.warning("   أضف ALIEXPRESS_REFRESH_TOKEN إلى GitHub Secrets لتفعيل التجديد التلقائي.")
+        return _active_token
+
+    log.info("🔄 محاولة تجديد Access Token باستخدام Refresh Token...")
+
+    params = {
+        "app_key":       ALIEXPRESS_APP_KEY,
+        "method":        "aliexpress.solution.token.refresh",
+        "timestamp":     str(int(time.time() * 1000)),
+        "sign_method":   "md5",
+        "refresh_token": ALIEXPRESS_REFRESH_TOKEN,
+    }
+    params["sign"] = _build_signature(params, ALIEXPRESS_SECRET)
+
+    try:
+        resp = requests.post(ALIEXPRESS_API_URL, data=params, timeout=20)
+        data = resp.json()
+
+        # AliExpress يُعيد التوكن داخل هذا المسار
+        result = data.get("aliexpress_solution_token_refresh_response", {}).get("result", {})
+        new_token = result.get("access_token")
+        expires_in = result.get("expire_time", 0)
+
+        if new_token:
+            _active_token = new_token
+            days_left = int(expires_in) // 86400 if expires_in else "?"
+            log.info(f"✅ تم تجديد التوكن بنجاح! صالح لـ {days_left} يوم.")
+            log.info("   ⚡ تذكر: حدّث ALIEXPRESS_ACCESS_TOKEN في GitHub Secrets بالقيمة الجديدة.")
+            return new_token
+        else:
+            log.error(f"❌ فشل تجديد التوكن — رد الـ API: {data}")
+
+    except Exception as exc:
+        log.error(f"❌ استثناء أثناء تجديد التوكن: {exc}")
+
+    return _active_token
+
+
+def fetch_products_from_api(keyword: str, page_index: int = 1, _retry: bool = False) -> dict:
     """
     إرسال طلب بحث إلى AliExpress API وإرجاع البيانات.
+    عند استلام خطأ IllegalAccessToken يُجدد التوكن تلقائياً ويعيد المحاولة مرة واحدة.
     """
+    global _active_token
     timestamp = str(int(time.time() * 1000))
 
     params = {
-        "app_key":    ALIEXPRESS_APP_KEY,
-        "method":     "aliexpress.ds.text.search",
-        "timestamp":  timestamp,
-        "sign_method": "md5",          # ✅ يجب أن يتطابق مع خوارزمية التوقيع
-        "session":    ALIEXPRESS_TOKEN, # ✅ AliExpress يستخدم 'session' وليس 'access_token'
+        "app_key":     ALIEXPRESS_APP_KEY,
+        "method":      "aliexpress.ds.text.search",
+        "timestamp":   timestamp,
+        "sign_method": "md5",
+        "session":     _active_token,   # ✅ يستخدم التوكن النشط (قابل للتجديد)
         # معلمات البحث
-        "keyWord":    keyword,
-        "local":      FETCH_CONFIG["local"],
+        "keyWord":     keyword,
+        "local":       FETCH_CONFIG["local"],
         "countryCode": FETCH_CONFIG["countryCode"],
-        "currency":   FETCH_CONFIG["currency"],
-        "sortBy":     FETCH_CONFIG["sortBy"],
-        "pageSize":   str(FETCH_CONFIG["pageSize"]),
-        "pageIndex":  str(page_index),
+        "currency":    FETCH_CONFIG["currency"],
+        "sortBy":      FETCH_CONFIG["sortBy"],
+        "pageSize":    str(FETCH_CONFIG["pageSize"]),
+        "pageIndex":   str(page_index),
     }
 
     # توليد التوقيع (MD5)
@@ -138,10 +192,21 @@ def fetch_products_from_api(keyword: str, page_index: int = 1) -> dict:
 
         data = response.json()
 
-        # ✅ كشف أخطاء AliExpress الصامتة
+        # ✅ كشف أخطاء AliExpress
         if "error_response" in data:
             err = data["error_response"]
-            log.error(f"   ↳ API Error: code={err.get('code')} sub_code={err.get('sub_code')} msg={err.get('msg')}")
+            err_code = err.get("code", "")
+            log.error(f"   ↳ API Error: code={err_code} sub_code={err.get('sub_code')} msg={err.get('msg')}")
+
+            # ── تجديد التوكن تلقائياً عند انتهاء صلاحيته ─────────────────
+            if err_code in ("IllegalAccessToken", "invalid-sessionkey") and not _retry:
+                log.info("   ↳ جارٍ تجديد التوكن والمحاولة مجدداً...")
+                refreshed = _refresh_access_token()
+                if refreshed != _active_token or refreshed == ALIEXPRESS_TOKEN:
+                    # إذا تم التجديد فعلاً، أعد المحاولة مرة واحدة
+                    _active_token = refreshed
+                    time.sleep(1)  # انتظار قصير قبل إعادة المحاولة
+                    return fetch_products_from_api(keyword, page_index, _retry=True)
             return {}
 
         return data
@@ -181,6 +246,7 @@ def extract_products(api_response: dict) -> tuple:
 
 def run_api_sync():
     """المهمة الرئيسية: تجمع البيانات من AliExpress وتحفظها في Supabase."""
+    global _active_token
 
     log.info("══════════════════════════════════════════════════")
     log.info("🚀 ALIEXPRESS API SYNC STARTED (GitHub Actions)")
@@ -191,6 +257,11 @@ def run_api_sync():
         log.error("❌ Missing AliExpress API credentials in environment variables!")
         log.error("   Required: ALIEXPRESS_APP_KEY, ALIEXPRESS_APP_SECRET, ALIEXPRESS_ACCESS_TOKEN")
         sys.exit(1)
+
+    # ── طباعة حالة إعدادات التوكن ─────────────────────────────────────────────
+    log.info(f"🔑 Access Token  : {'✅ Set' if ALIEXPRESS_TOKEN else '❌ Missing'}")
+    log.info(f"🔄 Refresh Token : {'✅ Set (Auto-Refresh ON)' if ALIEXPRESS_REFRESH_TOKEN else '⚠️  Not Set (Auto-Refresh OFF)'}")
+    _active_token = ALIEXPRESS_TOKEN  # تهيئة التوكن النشط
 
     # ── تهيئة Flask + SQLAlchemy للاتصال بـ Supabase ─────────────────────────
     try:

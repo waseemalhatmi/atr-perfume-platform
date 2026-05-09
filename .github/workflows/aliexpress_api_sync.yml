@@ -17,6 +17,7 @@ env:
   ALIEXPRESS_APP_KEY:        ${{ secrets.ALIEXPRESS_APP_KEY }}
   ALIEXPRESS_APP_SECRET:     ${{ secrets.ALIEXPRESS_APP_SECRET }}
   ALIEXPRESS_ACCESS_TOKEN:   ${{ secrets.ALIEXPRESS_ACCESS_TOKEN }}
+  ALIEXPRESS_REFRESH_TOKEN:  ${{ secrets.ALIEXPRESS_REFRESH_TOKEN }}
   SECRET_KEY:                ${{ secrets.SECRET_KEY }}
   # Redis not needed for sync — use memory fallback
   REDIS_URL:                 "memory://"
@@ -98,4 +99,15 @@ jobs:
         run: |
           echo "======================================"
           echo "Sync job finished. Check logs above."
+          echo "======================================"
+          if [ -z "$ALIEXPRESS_REFRESH_TOKEN" ]; then
+            echo ""
+            echo "⚠️  WARNING: ALIEXPRESS_REFRESH_TOKEN is not set!"
+            echo "   Auto-refresh is DISABLED. You must manually update"
+            echo "   ALIEXPRESS_ACCESS_TOKEN in Secrets every 30 days."
+            echo "   Get your Refresh Token by running: python scripts/get_aliexpress_token.py"
+            echo "   Then add it at: https://github.com/${{ github.repository }}/settings/secrets/actions"
+          else
+            echo "✅ Auto-Refresh is ENABLED (ALIEXPRESS_REFRESH_TOKEN is set)"
+          fi
           echo "======================================"

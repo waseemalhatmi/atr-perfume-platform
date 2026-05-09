@@ -10,19 +10,37 @@ import os
 import json
 
 # إضافة مجلد scripts للمسار
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, PROJECT_ROOT)
 sys.path.insert(0, os.path.dirname(__file__))
 import iop
 
-# ══════════════════════════════════════════════
-# ضع بياناتك هنا:
-# ══════════════════════════════════════════════
-APP_KEY    = "533828"
-APP_SECRET = "rDJtrWUyi3xKVdXWCVZDdb8KWHIIYojT"
+# ══════════════════════════════════════════════════════════════
+# تحميل الإعدادات من متغيرات البيئة فقط (لا تضع المفاتيح في الكود!)
+# ══════════════════════════════════════════════════════════════
+# قبل التشغيل، اضبط المتغيرات في PowerShell:
+#   $env:ALIEXPRESS_APP_KEY    = "533828"
+#   $env:ALIEXPRESS_APP_SECRET = "YOUR_APP_SECRET"
+#   $env:ALIEXPRESS_AUTH_CODE  = "3_533828_XXXXXXXXXX"
+# ثم شغّل: python scripts/get_aliexpress_token.py
+# ══════════════════════════════════════════════════════════════
+APP_KEY    = os.environ.get("ALIEXPRESS_APP_KEY", "")
+APP_SECRET = os.environ.get("ALIEXPRESS_APP_SECRET", "")
+AUTH_CODE  = os.environ.get("ALIEXPRESS_AUTH_CODE", "")
 
-# الكود الجديد الذي حصلت عليه من صفحة AliExpress
-# غيّره في كل مرة تحصل على كود جديد
-AUTH_CODE  = "3_533828_3Rwyh34K90Pyr4MIMlF8MDpx2778"
-# ══════════════════════════════════════════════
+# التحقق من وجود المتغيرات الضرورية
+_missing = [name for name, val in [
+    ("ALIEXPRESS_APP_KEY",    APP_KEY),
+    ("ALIEXPRESS_APP_SECRET", APP_SECRET),
+    ("ALIEXPRESS_AUTH_CODE",  AUTH_CODE),
+] if not val]
+if _missing:
+    print(f"❌ متغيرات البيئة الآتية غير مضبوطة: {', '.join(_missing)}")
+    print("   اضبطها في PowerShell ثم أعد التشغيل:")
+    for m in _missing:
+        print(f"   $env:{m} = \"YOUR_VALUE\"")
+    sys.exit(1)
+# ══════════════════════════════════════════════════════════════
 
 def get_token():
     print("=" * 55)
