@@ -105,11 +105,16 @@ def _build_signature(params: dict, secret: str) -> str:
 
 def _refresh_access_token() -> str:
     """
-    يجدد Access Token باستخدام Refresh Token المخزن في ALIEXPRESS_REFRESH_TOKEN.
-    يستخدم Endpoint الصحيح: POST /auth/token/refresh (وليس /sync)
-    يُعيد التوكن الجديد إذا نجح، أو التوكن القديم إذا فشل.
+    يجدد Access Token باستخدام Refresh Token.
 
-    التوثيق الرسمي: https://open.aliexpress.com  →  /auth/token/refresh
+    الطريقة الصحيحة وفق توثيق IOP الرسمي:
+    - URL  : POST https://api-sg.aliexpress.com/rest
+    - method: /auth/token/refresh  (يُمرر كـ param)
+    - v     : 2.0
+    - format: json
+    - sign  : MD5 يشمل جميع الـ params
+
+    المرجع: https://open.aliexpress.com/doc/api.htm
     """
     global _active_token
 
@@ -120,30 +125,59 @@ def _refresh_access_token() -> str:
 
     log.info("🔄 محاولة تجديد Access Token باستخدام Refresh Token...")
 
-    # ── المسار الصحيح هو /auth/token/refresh وليس /sync ──────────────────────
-    # يختلف هذا الـ endpoint عن sync في:
-    #   1. لا يحتاج حقل 'method' (المسار هو الـ method)
-    #   2. يُرجع التوكن مباشرة في root الاستجابة
-    REFRESH_URL = "https://api-sg.aliexpress.com/auth/token/refresh"
+    # ── Endpoint الصحيح لـ IOP: /rest مع method كـ param ─────────────────────
+    REST_URL = "https://api-sg.aliexpress.com/rest"
 
     timestamp = str(int(time.time() * 1000))
     params = {
         "app_key":       ALIEXPRESS_APP_KEY,
+        "method":        "/auth/token/refresh",   # ✅ مسار التجديد كـ method param
         "timestamp":     timestamp,
         "sign_method":   "md5",
+        "v":             "2.0",                   # ✅ مطلوب في IOP
+        "format":        "json",                  # ✅ صيغة الاستجابة
         "refresh_token": ALIEXPRESS_REFRESH_TOKEN,
     }
     params["sign"] = _build_signature(params, ALIEXPRESS_SECRET)
 
     try:
-        resp = requests.post(REFRESH_URL, data=params, timeout=20)
-        log.info(f"   ↳ Refresh API HTTP {resp.status_code} — raw: {resp.text[:300]}")
+        resp = requests.post(
+            REST_URL,
+            data=params,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            timeout=20
+        )
+        raw = resp.text
+        log.info(f"   ↳ Refresh REST HTTP {resp.status_code} — raw: {raw[:400]}")
+
+        # ── إذا HTTP 405 مرة ثانية، جرب /sync كـ fallback ─────────────────────
+        if resp.status_code == 405:
+            log.warning("   ↳ /rest أعطى 405، جرب /sync مع method=aliexpress.system.oauth.token.refresh ...")
+            params_sync = {
+                "app_key":       ALIEXPRESS_APP_KEY,
+                "method":        "aliexpress.system.oauth.token.refresh",
+                "timestamp":     str(int(time.time() * 1000)),
+                "sign_method":   "md5",
+                "refresh_token": ALIEXPRESS_REFRESH_TOKEN,
+            }
+            params_sync["sign"] = _build_signature(params_sync, ALIEXPRESS_SECRET)
+            resp_sync = requests.post(ALIEXPRESS_API_URL, data=params_sync, timeout=20)
+            raw = resp_sync.text
+            log.info(f"   ↳ Sync Refresh HTTP {resp_sync.status_code} — raw: {raw[:400]}")
+            if resp_sync.status_code == 200 and raw.strip():
+                resp = resp_sync
+
+        if not resp.text.strip():
+            log.error("❌ الرد فارغ تماماً — الـ endpoint غير صحيح أو التوكن منتهٍ كلياً.")
+            return _active_token
+
         data = resp.json()
 
-        # ── AliExpress يُعيد التوكن في root أو داخل 'result' ──────────────────
+        # ── AliExpress يُعيد التوكن في مسارات مختلفة حسب الإصدار ──────────────
         new_token = (
             data.get("access_token") or
-            data.get("result", {}).get("access_token")
+            data.get("result", {}).get("access_token") or
+            data.get("data", {}).get("access_token")
         )
         expires_in = (
             data.get("expire_time") or
@@ -162,33 +196,15 @@ def _refresh_access_token() -> str:
             log.info("   ⚡ تذكر: حدّث ALIEXPRESS_ACCESS_TOKEN في GitHub Secrets بالقيمة الجديدة.")
             return new_token
 
-        # ── محاولة ثانية: /auth/token/security/refresh (لتطبيقات Security OAuth) ─
+        log.error(f"❌ فشل تجديد التوكن — رد الـ API: {data}")
         if "error_response" in data:
-            err_code = data["error_response"].get("code", "")
-            log.warning(f"   ↳ /auth/token/refresh فشل (code={err_code}). جرب /auth/token/security/refresh ...")
+            err = data["error_response"]
+            log.error(f"   code={err.get('code')} | msg={err.get('msg')}")
+            log.error("   ⚠️  قد يكون الـ Refresh Token نفسه منتهياً (صالح سنة واحدة فقط).")
+            log.error("   ⚠️  الحل: احصل على Auth Code جديد وشغّل scripts/get_aliexpress_token.py")
 
-            SECURITY_REFRESH_URL = "https://api-sg.aliexpress.com/auth/token/security/refresh"
-            params2 = {
-                "app_key":       ALIEXPRESS_APP_KEY,
-                "timestamp":     str(int(time.time() * 1000)),
-                "sign_method":   "md5",
-                "refresh_token": ALIEXPRESS_REFRESH_TOKEN,
-            }
-            params2["sign"] = _build_signature(params2, ALIEXPRESS_SECRET)
-            resp2 = requests.post(SECURITY_REFRESH_URL, data=params2, timeout=20)
-            log.info(f"   ↳ Security Refresh HTTP {resp2.status_code} — raw: {resp2.text[:300]}")
-            data2 = resp2.json()
-            new_token2 = (
-                data2.get("access_token") or
-                data2.get("result", {}).get("access_token")
-            )
-            if new_token2:
-                _active_token = new_token2
-                log.info("✅ تم تجديد التوكن عبر security/refresh بنجاح!")
-                return new_token2
-
-        log.error(f"❌ فشل تجديد التوكن بكلا الـ Endpoints — آخر رد: {data}")
-
+    except ValueError:
+        log.error("❌ الرد ليس JSON صالح — الـ endpoint أو الـ Content-Type غير صحيح.")
     except Exception as exc:
         log.error(f"❌ استثناء أثناء تجديد التوكن: {exc}")
 
