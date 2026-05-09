@@ -23,6 +23,8 @@ from urllib.parse import urlencode
 # ── 1. Setup ──────────────────────────────────────────────────────────────────
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, PROJECT_ROOT)
+sys.path.insert(0, os.path.dirname(__file__))  # لاستيراد iop.py من مجلد scripts
+import iop  # ✅ IOP SDK الرسمي موجود في scripts/iop.py
 
 logging.basicConfig(
     level=logging.INFO,
@@ -107,14 +109,11 @@ def _refresh_access_token() -> str:
     """
     يجدد Access Token باستخدام Refresh Token.
 
-    الطريقة الصحيحة وفق توثيق IOP الرسمي:
-    - URL  : POST https://api-sg.aliexpress.com/rest
-    - method: /auth/token/refresh  (يُمرر كـ param)
-    - v     : 2.0
-    - format: json
-    - sign  : MD5 يشمل جميع الـ params
-
-    المرجع: https://open.aliexpress.com/doc/api.htm
+    الكود الرسمي من صفحة AliExpress Open Platform:
+        client  = iop.IopClient(url, appkey, appSecret)
+        request = iop.IopRequest('/auth/token/refresh')
+        request.add_api_param('refresh_token', REFRESH_TOKEN)
+        response = client.execute(request)
     """
     global _active_token
 
@@ -123,55 +122,29 @@ def _refresh_access_token() -> str:
         log.warning("   أضف ALIEXPRESS_REFRESH_TOKEN إلى GitHub Secrets لتفعيل التجديد التلقائي.")
         return _active_token
 
-    log.info("🔄 محاولة تجديد Access Token باستخدام Refresh Token...")
-
-    # ── Endpoint الصحيح لـ IOP: /rest مع method كـ param ─────────────────────
-    REST_URL = "https://api-sg.aliexpress.com/rest"
-
-    timestamp = str(int(time.time() * 1000))
-    params = {
-        "app_key":       ALIEXPRESS_APP_KEY,
-        "method":        "/auth/token/refresh",   # ✅ مسار التجديد كـ method param
-        "timestamp":     timestamp,
-        "sign_method":   "md5",
-        "v":             "2.0",                   # ✅ مطلوب في IOP
-        "format":        "json",                  # ✅ صيغة الاستجابة
-        "refresh_token": ALIEXPRESS_REFRESH_TOKEN,
-    }
-    params["sign"] = _build_signature(params, ALIEXPRESS_SECRET)
+    log.info("🔄 محاولة تجديد Access Token باستخدام IOP SDK الرسمي...")
 
     try:
-        resp = requests.post(
-            REST_URL,
-            data=params,
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-            timeout=20
+        # ✅ بالضبط كما هو موثّق في صفحة AliExpress Developer
+        client  = iop.IopClient(
+            "https://api-sg.aliexpress.com",
+            ALIEXPRESS_APP_KEY,
+            ALIEXPRESS_SECRET
         )
-        raw = resp.text
-        log.info(f"   ↳ Refresh REST HTTP {resp.status_code} — raw: {raw[:400]}")
+        request = iop.IopRequest("/auth/token/refresh")
+        request.add_api_param("refresh_token", ALIEXPRESS_REFRESH_TOKEN)
 
-        # ── إذا HTTP 405 مرة ثانية، جرب /sync كـ fallback ─────────────────────
-        if resp.status_code == 405:
-            log.warning("   ↳ /rest أعطى 405، جرب /sync مع method=aliexpress.system.oauth.token.refresh ...")
-            params_sync = {
-                "app_key":       ALIEXPRESS_APP_KEY,
-                "method":        "aliexpress.system.oauth.token.refresh",
-                "timestamp":     str(int(time.time() * 1000)),
-                "sign_method":   "md5",
-                "refresh_token": ALIEXPRESS_REFRESH_TOKEN,
-            }
-            params_sync["sign"] = _build_signature(params_sync, ALIEXPRESS_SECRET)
-            resp_sync = requests.post(ALIEXPRESS_API_URL, data=params_sync, timeout=20)
-            raw = resp_sync.text
-            log.info(f"   ↳ Sync Refresh HTTP {resp_sync.status_code} — raw: {raw[:400]}")
-            if resp_sync.status_code == 200 and raw.strip():
-                resp = resp_sync
+        response = client.execute(request)
+        log.info(f"   ↳ IOP Refresh: HTTP {response.http_status} | type={response.type}")
+        log.info(f"   ↳ raw: {response.body[:400]}")
 
-        if not resp.text.strip():
-            log.error("❌ الرد فارغ تماماً — الـ endpoint غير صحيح أو التوكن منتهٍ كلياً.")
+        # تحليل الرد
+        try:
+            data = json.loads(response.body)
+        except (json.JSONDecodeError, TypeError):
+            log.error("❌ الرد ليس JSON صالح.")
             return _active_token
 
-        data = resp.json()
 
         # ── AliExpress يُعيد التوكن في مسارات مختلفة حسب الإصدار ──────────────
         new_token = (
