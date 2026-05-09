@@ -19,13 +19,18 @@ env:
   ALIEXPRESS_ACCESS_TOKEN:   ${{ secrets.ALIEXPRESS_ACCESS_TOKEN }}
   ALIEXPRESS_REFRESH_TOKEN:  ${{ secrets.ALIEXPRESS_REFRESH_TOKEN }}
   SECRET_KEY:                ${{ secrets.SECRET_KEY }}
-  # Redis not needed for sync — use memory fallback
+  # Redis not needed for sync - use memory fallback
   REDIS_URL:                 "memory://"
   RATELIMIT_STORAGE_URI:     "memory://"
   # Use sync mode to bypass strict production checks
   FLASK_ENV:                 "development"
   HTTPS_ENABLED:             "False"
   DRY_RUN:                   ${{ github.event.inputs.dry_run || 'false' }}
+  # ── FIX: Node.js 20 deprecation warning ──────────────────────────────────────
+  # actions/checkout@v4 and actions/setup-python@v5 default to Node.js 20.
+  # Node.js 20 will be removed from runners on 2026-09-16.
+  # This variable forces Node.js 24 now to eliminate warnings.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   aliexpress-api-sync:
@@ -81,6 +86,13 @@ jobs:
             echo "OK: DATABASE_URL is set"
           fi
 
+          if [ -z "$ALIEXPRESS_REFRESH_TOKEN" ]; then
+            echo "WARNING: ALIEXPRESS_REFRESH_TOKEN is not set - Auto-refresh DISABLED!"
+            echo "         Token must be manually renewed every 30 days."
+          else
+            echo "OK: ALIEXPRESS_REFRESH_TOKEN is set (Auto-refresh ENABLED)"
+          fi
+
           if [ "$MISSING" -eq 1 ]; then
             echo "One or more required secrets are missing. Add them at:"
             echo "https://github.com/waseemalhatmi/atr-perfume-platform/settings/secrets/actions"
@@ -102,12 +114,12 @@ jobs:
           echo "======================================"
           if [ -z "$ALIEXPRESS_REFRESH_TOKEN" ]; then
             echo ""
-            echo "⚠️  WARNING: ALIEXPRESS_REFRESH_TOKEN is not set!"
+            echo "WARNING: ALIEXPRESS_REFRESH_TOKEN is not set!"
             echo "   Auto-refresh is DISABLED. You must manually update"
             echo "   ALIEXPRESS_ACCESS_TOKEN in Secrets every 30 days."
-            echo "   Get your Refresh Token by running: python scripts/get_aliexpress_token.py"
+            echo "   Get your Refresh Token: python scripts/get_aliexpress_token.py"
             echo "   Then add it at: https://github.com/${{ github.repository }}/settings/secrets/actions"
           else
-            echo "✅ Auto-Refresh is ENABLED (ALIEXPRESS_REFRESH_TOKEN is set)"
+            echo "Auto-Refresh is ENABLED (ALIEXPRESS_REFRESH_TOKEN is set)"
           fi
           echo "======================================"

@@ -106,8 +106,10 @@ def _build_signature(params: dict, secret: str) -> str:
 def _refresh_access_token() -> str:
     """
     يجدد Access Token باستخدام Refresh Token المخزن في ALIEXPRESS_REFRESH_TOKEN.
-    يُستدعى تلقائياً عند استلام خطأ IllegalAccessToken من الـ API.
+    يستخدم Endpoint الصحيح: POST /auth/token/refresh (وليس /sync)
     يُعيد التوكن الجديد إذا نجح، أو التوكن القديم إذا فشل.
+
+    التوثيق الرسمي: https://open.aliexpress.com  →  /auth/token/refresh
     """
     global _active_token
 
@@ -118,32 +120,74 @@ def _refresh_access_token() -> str:
 
     log.info("🔄 محاولة تجديد Access Token باستخدام Refresh Token...")
 
+    # ── المسار الصحيح هو /auth/token/refresh وليس /sync ──────────────────────
+    # يختلف هذا الـ endpoint عن sync في:
+    #   1. لا يحتاج حقل 'method' (المسار هو الـ method)
+    #   2. يُرجع التوكن مباشرة في root الاستجابة
+    REFRESH_URL = "https://api-sg.aliexpress.com/auth/token/refresh"
+
+    timestamp = str(int(time.time() * 1000))
     params = {
         "app_key":       ALIEXPRESS_APP_KEY,
-        "method":        "aliexpress.solution.token.refresh",
-        "timestamp":     str(int(time.time() * 1000)),
+        "timestamp":     timestamp,
         "sign_method":   "md5",
         "refresh_token": ALIEXPRESS_REFRESH_TOKEN,
     }
     params["sign"] = _build_signature(params, ALIEXPRESS_SECRET)
 
     try:
-        resp = requests.post(ALIEXPRESS_API_URL, data=params, timeout=20)
+        resp = requests.post(REFRESH_URL, data=params, timeout=20)
+        log.info(f"   ↳ Refresh API HTTP {resp.status_code} — raw: {resp.text[:300]}")
         data = resp.json()
 
-        # AliExpress يُعيد التوكن داخل هذا المسار
-        result = data.get("aliexpress_solution_token_refresh_response", {}).get("result", {})
-        new_token = result.get("access_token")
-        expires_in = result.get("expire_time", 0)
+        # ── AliExpress يُعيد التوكن في root أو داخل 'result' ──────────────────
+        new_token = (
+            data.get("access_token") or
+            data.get("result", {}).get("access_token")
+        )
+        expires_in = (
+            data.get("expire_time") or
+            data.get("result", {}).get("expire_time") or
+            data.get("expires_in") or
+            0
+        )
 
         if new_token:
             _active_token = new_token
-            days_left = int(expires_in) // 86400 if expires_in else "?"
+            try:
+                days_left = int(expires_in) // 86400
+            except (TypeError, ValueError):
+                days_left = "?"
             log.info(f"✅ تم تجديد التوكن بنجاح! صالح لـ {days_left} يوم.")
             log.info("   ⚡ تذكر: حدّث ALIEXPRESS_ACCESS_TOKEN في GitHub Secrets بالقيمة الجديدة.")
             return new_token
-        else:
-            log.error(f"❌ فشل تجديد التوكن — رد الـ API: {data}")
+
+        # ── محاولة ثانية: /auth/token/security/refresh (لتطبيقات Security OAuth) ─
+        if "error_response" in data:
+            err_code = data["error_response"].get("code", "")
+            log.warning(f"   ↳ /auth/token/refresh فشل (code={err_code}). جرب /auth/token/security/refresh ...")
+
+            SECURITY_REFRESH_URL = "https://api-sg.aliexpress.com/auth/token/security/refresh"
+            params2 = {
+                "app_key":       ALIEXPRESS_APP_KEY,
+                "timestamp":     str(int(time.time() * 1000)),
+                "sign_method":   "md5",
+                "refresh_token": ALIEXPRESS_REFRESH_TOKEN,
+            }
+            params2["sign"] = _build_signature(params2, ALIEXPRESS_SECRET)
+            resp2 = requests.post(SECURITY_REFRESH_URL, data=params2, timeout=20)
+            log.info(f"   ↳ Security Refresh HTTP {resp2.status_code} — raw: {resp2.text[:300]}")
+            data2 = resp2.json()
+            new_token2 = (
+                data2.get("access_token") or
+                data2.get("result", {}).get("access_token")
+            )
+            if new_token2:
+                _active_token = new_token2
+                log.info("✅ تم تجديد التوكن عبر security/refresh بنجاح!")
+                return new_token2
+
+        log.error(f"❌ فشل تجديد التوكن بكلا الـ Endpoints — آخر رد: {data}")
 
     except Exception as exc:
         log.error(f"❌ استثناء أثناء تجديد التوكن: {exc}")
