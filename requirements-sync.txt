@@ -19,3 +19,6 @@ requests==2.31.0
 # ─── AliExpress API Sync ────────────────────────────────────────────────────
 # requests already included above (used for AliExpress API HTTP calls)
 # No additional library needed — pure requests + HMAC-SHA256 built-in
+
+# ─── AliExpress Scraper (Playwright) ────────────────────────────────────────
+playwright==1.44.0
