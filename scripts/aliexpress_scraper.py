@@ -35,10 +35,16 @@ log = logging.getLogger("aliexpress_scraper")
 # ── 3. التحقق من وجود Playwright و Stealth ──────────────────────────────────────
 try:
     from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+except ImportError:
+    log.error("❌ مكتبة Playwright غير مثبتة!")
+    log.error("   شغّل: pip install playwright && playwright install chromium")
+    sys.exit(1)
+
+try:
     from playwright_stealth import stealth_sync
 except ImportError:
-    log.error("❌ المكتبات المطلوبة غير مثبتة!")
-    log.error("   شغّل: pip install playwright playwright-stealth && playwright install chromium")
+    log.error("❌ مكتبة playwright-stealth غير مثبتة!")
+    log.error("   شغّل: pip install playwright-stealth")
     sys.exit(1)
 
 # ══════════════════════════════════════════════════════════════════════════════
