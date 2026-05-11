@@ -32,12 +32,13 @@ logging.basicConfig(
 )
 log = logging.getLogger("aliexpress_scraper")
 
-# ── 3. التحقق من وجود Playwright ──────────────────────────────────────────────
+# ── 3. التحقق من وجود Playwright و Stealth ──────────────────────────────────────
 try:
     from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+    from playwright_stealth import stealth_sync
 except ImportError:
-    log.error("❌ Playwright غير مثبت!")
-    log.error("   شغّل: pip install playwright && playwright install chromium")
+    log.error("❌ المكتبات المطلوبة غير مثبتة!")
+    log.error("   شغّل: pip install playwright playwright-stealth && playwright install chromium")
     sys.exit(1)
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -55,13 +56,20 @@ PERFUME_KEYWORDS = [
     "attar perfume",
 ]
 
+# قائمة User-Agents متنوعة لتجنب كشف النمط
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+]
+
 # إعدادات الجلب
 SCRAPE_CONFIG = {
-    "max_pages_per_keyword": 5,   # 5 صفحات × ~60 منتج = ~300 منتج/كلمة
-    "delay_between_pages": (2, 5),  # ثانية عشوائية بين الصفحات (anti-ban)
-    "delay_between_keywords": (5, 10),
-    "headless": True,              # True = بدون واجهة (للسيرفر)
-    "timeout_ms": 30_000,          # 30 ثانية للانتظار
+    "max_pages_per_keyword": 3,     # تقليل الصفحات لزيادة السرعة وتقليل احتمالية الحظر
+    "delay_between_pages": (3, 7),  # زيادة التأخير قليلاً ليبدو بشرياً
+    "delay_between_keywords": (8, 15),
+    "headless": True,
+    "timeout_ms": 45_000,           # زيادة مهلة الانتظار لـ 45 ثانية
 }
 
 # فلترة العطور
@@ -100,17 +108,21 @@ def _parse_price(raw: str) -> Optional[float]:
         return None
 
 
-def _extract_product_id(url: str) -> Optional[str]:
-    """استخراج item_id من رابط AliExpress"""
-    if not url:
-        return None
-    # مثال: https://www.aliexpress.com/item/1234567890.html
-    match = re.search(r"/item/(\d+)", url)
-    if match:
-        return match.group(1)
-    # مثال: item_id=1234567890
-    match = re.search(r"item_id=(\d+)", url)
-    return match.group(1) if match else None
+def _handle_popups(page):
+    """التعامل مع النوافذ المنبثقة (اختيار الدولة، الكوكيز)"""
+    try:
+        popup_close_selectors = [
+            ".ship-to--close--3ToR9m9",
+            ".next-dialog-close",
+            ".pop-close-btn",
+            ".close-button",
+        ]
+        for selector in popup_close_selectors:
+            if page.is_visible(selector, timeout=1000):
+                page.click(selector)
+                log.debug(f"   💡 Closed popup: {selector}")
+    except:
+        pass
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -126,111 +138,81 @@ def _random_delay(range_tuple: tuple):
 
 def scrape_keyword(browser, keyword: str) -> list[dict]:
     """
-    يبحث عن كلمة مفتاحية في AliExpress ويرجع قائمة المنتجات المُصفّاة.
-    يستخدم نفس المتصفح (browser) لتجنب إعادة الفتح في كل كلمة.
+    يبحث عن كلمة مفتاحية في AliExpress باستخدام تقنيات Stealth.
     """
     collected = []
     context = browser.new_context(
-        user_agent=(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        ),
+        user_agent=random.choice(USER_AGENTS),
         locale="en-US",
-        viewport={"width": 1366, "height": 768},
-        extra_http_headers={
-            "Accept-Language": "en-US,en;q=0.9",
-        },
+        viewport={"width": 1920, "height": 1080},
     )
+
+    # ✅ تفعيل وضع التخفي (Stealth)
+    stealth_sync(context)
 
     try:
         page = context.new_page()
 
         for page_num in range(1, SCRAPE_CONFIG["max_pages_per_keyword"] + 1):
-            url = (
-                f"https://www.aliexpress.com/wholesale"
-                f"?SearchText={keyword.replace(' ', '+')}"
-                f"&page={page_num}"
-                f"&SortType=total_tranpro_desc"  # الأكثر مبيعاً أولاً
-            )
+            # استخدام صيغة الروابط الأكثر استقراراً (SEO Friendly)
+            search_slug = keyword.replace(" ", "-")
+            url = f"https://www.aliexpress.com/w/wholesale-{search_slug}.html?page={page_num}&g=y&SearchText={search_slug}"
 
-            log.info(f"   📄 Page {page_num}: {url[:80]}...")
+            log.info(f"   📄 Page {page_num}: {url[:70]}...")
 
             try:
-                page.goto(url, wait_until="domcontentloaded",
-                          timeout=SCRAPE_CONFIG["timeout_ms"])
-                # انتظر تحميل بطاقات المنتجات
-                page.wait_for_selector(
-                    "[class*='product-item'], [class*='list--gallery'],"
-                    " a[href*='/item/']",
-                    timeout=SCRAPE_CONFIG["timeout_ms"],
-                )
-            except PlaywrightTimeout:
-                log.warning(f"   ⚠️  Timeout on page {page_num} — skipping.")
-                break
+                # الانتقال للصفحة مع انتظار تحميل الشبكة
+                page.goto(url, wait_until="load", timeout=SCRAPE_CONFIG["timeout_ms"])
 
-            # ── استخراج بطاقات المنتجات ─────────────────────────────────────
+                # التعامل مع النوافذ المنبثقة فوراً
+                _handle_popups(page)
+
+                # محاكاة حركة بشرية (Scroll) لتفعيل تحميل المنتجات (Lazy Loading)
+                page.evaluate("window.scrollBy(0, 800)")
+                _random_delay((1, 2))
+                page.evaluate("window.scrollBy(0, 1200)")
+
+                # الانتظار حتى تظهر بطاقات المنتجات
+                page.wait_for_selector(
+                    "div[class*='product-item'], div[data-product-id], a[href*='/item/']",
+                    timeout=20_000,
+                )
+
+            except PlaywrightTimeout:
+                log.warning(f"   ⚠️  Timeout on page {page_num} — AliExpress may be blocking or slow.")
+                pass
+
+            # ── استخراج البيانات باستخدام JavaScript داخل المتصفح ────────────────
             products_on_page = page.evaluate("""
                 () => {
                     const results = [];
-                    // محاولة أولى: بطاقات النتائج الحديثة
-                    const cards = document.querySelectorAll(
-                        'a[href*="/item/"]'
-                    );
-                    const seen = new Set();
+                    const seenIds = new Set();
+                    const links = document.querySelectorAll('a[href*="/item/"]');
 
-                    cards.forEach(a => {
-                        const href = a.href || '';
-                        const idMatch = href.match(/\\/item\\/(\\d+)/);
-                        if (!idMatch) return;
-                        const itemId = idMatch[1];
-                        if (seen.has(itemId)) return;
-                        seen.add(itemId);
+                    links.forEach(link => {
+                        const href = link.href || '';
+                        const idMatch = href.match(/\\/item\\/(\\d+)\\.html/);
+                        const itemId = idMatch ? idMatch[1] : null;
 
-                        // ── محاولة استخراج العنوان ──
-                        const card = a.closest(
-                            '[class*="item"], [class*="product"], ' +
-                            '[class*="card"], [class*="tile"]'
-                        ) || a.parentElement;
+                        if (itemId && !seenIds.has(itemId)) {
+                            seenIds.add(itemId);
+                            const card = link.closest('[data-index], [class*="item"], [class*="product"]') || link.parentElement;
+                            const titleEl = card.querySelector('h1, h2, h3, [class*="title"], [class*="name"]');
+                            const title = titleEl ? titleEl.innerText.trim() : "";
+                            const priceEl = card.querySelector('[class*="price"], [class*="sale"]');
+                            const priceText = priceEl ? priceEl.innerText.trim() : "";
+                            const imgEl = card.querySelector('img');
+                            const img = imgEl ? (imgEl.src || imgEl.dataset.src || "") : "";
 
-                        const titleEl = card
-                            ? card.querySelector(
-                                '[class*="title"], h3, span[title], ' +
-                                '[class*="name"]'
-                              )
-                            : null;
-                        const title = titleEl
-                            ? (titleEl.textContent || titleEl.title || '').trim()
-                            : (a.title || a.textContent || '').trim();
-
-                        // ── محاولة استخراج السعر ──
-                        const priceEl = card
-                            ? card.querySelector(
-                                '[class*="price--current"], ' +
-                                '[class*="sale-price"], ' +
-                                '[class*="price"]'
-                              )
-                            : null;
-                        const priceText = priceEl
-                            ? (priceEl.textContent || '').trim()
-                            : '';
-
-                        // ── محاولة استخراج الصورة ──
-                        const imgEl = card
-                            ? card.querySelector('img[src], img[data-src]')
-                            : null;
-                        const img = imgEl
-                            ? (imgEl.src || imgEl.dataset.src || '')
-                            : '';
-
-                        if (title && title.length > 5) {
-                            results.push({
-                                item_id: itemId,
-                                title: title.substring(0, 200),
-                                price_text: priceText,
-                                image_url: img.startsWith('http') ? img : '',
-                                item_url: href,
-                            });
+                            if (title.length > 10) {
+                                results.push({
+                                    item_id: itemId,
+                                    title: title,
+                                    price_text: priceText,
+                                    image_url: img.startsWith('http') ? img : '',
+                                    item_url: href.split('?')[0],
+                                });
+                            }
                         }
                     });
                     return results;
@@ -238,15 +220,20 @@ def scrape_keyword(browser, keyword: str) -> list[dict]:
             """)
 
             if not products_on_page:
-                log.info(f"   ↳ No products found on page {page_num}. Stopping.")
-                break
+                log.info(f"   ↳ No products found on page {page_num}. Trying next page...")
+                continue
 
-            # فلترة العطور فقط
-            perfumes = [p for p in products_on_page if _is_perfume(p["title"])]
+            # فلترة وتحليل النتائج
+            for p in products_on_page:
+                if _is_perfume(p["title"]):
+                    p["price"] = _parse_price(p["price_text"])
+                    if p["price"] and p["price"] > 0:
+                        collected.append(p)
 
-            # تحليل السعر
-            for p in perfumes:
-                p["price"] = _parse_price(p.get("price_text", ""))
+            log.info(f"   ↳ Extracted {len(products_on_page)} cards → {len(collected)} valid perfumes so far")
+
+            if page_num < SCRAPE_CONFIG["max_pages_per_keyword"]:
+                _random_delay(SCRAPE_CONFIG["delay_between_pages"])
 
             # تصفية المنتجات بدون سعر (اختياري — تُحفظ بسعر 0 إذا أردت)
             perfumes_valid = [

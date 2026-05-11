@@ -22,3 +22,4 @@ requests==2.31.0
 
 # ─── AliExpress Scraper (Playwright) ────────────────────────────────────────
 playwright==1.44.0
+playwright-stealth==1.0.6
