@@ -4,10 +4,10 @@ scripts/aliexpress_scraper.py
 AliExpress Web Scraper — يعمل بجانب aliexpress_api_sync.py
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 • لا يحتاج API Key أو Access Token
-• يستخدم Playwright لمحاكاة المتصفح وسحب العطور من AliExpress
+• يستخدم Playwright مع تقنيات Stealth يدوية (بدون مكتبات خارجية)
 • يخزن البيانات في نفس قاعدة Supabase بنفس models الموجودة
 • يتحقق من external_item_id لتجنب التكرار مع سكربت الـ API
-• مصدر البيانات: 'aliexpress_scraper' (مختلف عن 'aliexpress_api')
+• مصدر البيانات: 'aliexpress_scraper'
 ══════════════════════════════════════════════════════════════════════════════
 """
 
@@ -32,7 +32,7 @@ logging.basicConfig(
 )
 log = logging.getLogger("aliexpress_scraper")
 
-# ── 3. التحقق من وجود Playwright و Stealth ──────────────────────────────────────
+# ── 3. التحقق من وجود Playwright فقط (لا نحتاج playwright-stealth) ───────────
 try:
     from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 except ImportError:
@@ -40,18 +40,10 @@ except ImportError:
     log.error("   شغّل: pip install playwright && playwright install chromium")
     sys.exit(1)
 
-try:
-    from playwright_stealth import stealth_sync
-except ImportError:
-    log.error("❌ مكتبة playwright-stealth غير مثبتة!")
-    log.error("   شغّل: pip install playwright-stealth")
-    sys.exit(1)
-
 # ══════════════════════════════════════════════════════════════════════════════
 # ── 4. إعدادات السكربت ───────────────────────────────────────────────────────
 # ══════════════════════════════════════════════════════════════════════════════
 
-# كلمات البحث — تتوافق مع aliexpress_api_sync.py
 PERFUME_KEYWORDS = [
     "perfume",
     "eau de parfum",
@@ -62,23 +54,20 @@ PERFUME_KEYWORDS = [
     "attar perfume",
 ]
 
-# قائمة User-Agents متنوعة لتجنب كشف النمط
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
 ]
 
-# إعدادات الجلب
 SCRAPE_CONFIG = {
-    "max_pages_per_keyword": 3,     # تقليل الصفحات لزيادة السرعة وتقليل احتمالية الحظر
-    "delay_between_pages": (3, 7),  # زيادة التأخير قليلاً ليبدو بشرياً
+    "max_pages_per_keyword": 3,
+    "delay_between_pages":   (3, 7),
     "delay_between_keywords": (8, 15),
     "headless": True,
-    "timeout_ms": 45_000,           # زيادة مهلة الانتظار لـ 45 ثانية
+    "timeout_ms": 45_000,
 }
 
-# فلترة العطور
 WHITELIST = [
     "perfume", "fragrance", "cologne", "parfum", "scent", "attar", "oud", "musk",
     "eau de parfum", "edp", "eau de toilette", "edt", "extrait", "absolu",
@@ -92,9 +81,41 @@ BLACKLIST = [
     "case", "cover", "adapter", "usb", "wireless", "speaker", "camera",
 ]
 
+# ── تعليمات JavaScript لإخفاء بصمة البوت تماماً (Stealth بدون مكتبة خارجية) ─
+_STEALTH_JS = """
+() => {
+    // 1. إخفاء خاصية webdriver
+    Object.defineProperty(navigator, 'webdriver', { get: () => false });
+
+    // 2. تعبئة plugins بقيم وهمية
+    Object.defineProperty(navigator, 'plugins', {
+        get: () => [1, 2, 3, 4, 5],
+    });
+
+    // 3. تعبئة languages
+    Object.defineProperty(navigator, 'languages', {
+        get: () => ['en-US', 'en'],
+    });
+
+    // 4. إخفاء chrome automation
+    window.chrome = { runtime: {} };
+
+    // 5. إخفاء permissions
+    const originalQuery = window.navigator.permissions.query;
+    window.navigator.permissions.query = (parameters) =>
+        parameters.name === 'notifications'
+            ? Promise.resolve({ state: Notification.permission })
+            : originalQuery(parameters);
+}
+"""
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── 5. دوال المساعدة ─────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
 
 def _is_perfume(title: str) -> bool:
-    """فلترة دقيقة: هل المنتج عطر؟ — نفس المنطق في aliexpress_api_sync.py"""
+    """فلترة دقيقة: هل المنتج عطر؟"""
     if not title:
         return False
     text = title.lower()
@@ -108,156 +129,186 @@ def _parse_price(raw: str) -> Optional[float]:
     if not raw:
         return None
     cleaned = re.sub(r"[^\d.]", "", raw.replace(",", "."))
+    # تجنب نقطة فارغة مثل "." أو قيم غير صحيحة
+    if not cleaned or cleaned == ".":
+        return None
     try:
-        return float(cleaned) if cleaned else None
+        val = float(cleaned)
+        return val if val > 0 else None
     except ValueError:
         return None
 
 
-def _handle_popups(page):
-    """التعامل مع النوافذ المنبثقة (اختيار الدولة، الكوكيز)"""
-    try:
-        popup_close_selectors = [
-            ".ship-to--close--3ToR9m9",
-            ".next-dialog-close",
-            ".pop-close-btn",
-            ".close-button",
-        ]
-        for selector in popup_close_selectors:
-            if page.is_visible(selector, timeout=1000):
-                page.click(selector)
-                log.debug(f"   💡 Closed popup: {selector}")
-    except:
-        pass
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# ── 5. محرك الكشط (Playwright Engine) ────────────────────────────────────────
-# ══════════════════════════════════════════════════════════════════════════════
-
 def _random_delay(range_tuple: tuple):
     """انتظار عشوائي لتجنب الحظر"""
-    t = random.uniform(*range_tuple)
-    log.debug(f"   ⏳ Waiting {t:.1f}s...")
-    time.sleep(t)
+    time.sleep(random.uniform(*range_tuple))
 
 
-def scrape_keyword(browser, keyword: str) -> list[dict]:
+def _handle_popups(page):
+    """إغلاق النوافذ المنبثقة (اختيار الدولة، الكوكيز)"""
+    selectors = [
+        ".ship-to--close--3ToR9m9",
+        ".next-dialog-close",
+        ".pop-close-btn",
+        ".close-button",
+        "[class*='close-btn']",
+        "[class*='modal-close']",
+    ]
+    for selector in selectors:
+        try:
+            if page.is_visible(selector, timeout=1000):
+                page.click(selector)
+        except Exception:
+            pass
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── 6. محرك الكشط الاحترافي ──────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+
+def scrape_keyword(browser, keyword: str) -> list:
     """
-    يبحث عن كلمة مفتاحية في AliExpress باستخدام تقنيات Stealth.
+    يبحث عن كلمة مفتاحية في AliExpress باستخدام Stealth يدوي.
+    يُعيد قائمة المنتجات المُصفّاة (عطور فقط) مع سعر صحيح.
     """
     collected = []
+
     context = browser.new_context(
         user_agent=random.choice(USER_AGENTS),
         locale="en-US",
         viewport={"width": 1920, "height": 1080},
+        extra_http_headers={
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        },
     )
-
-    # ✅ تفعيل وضع التخفي (Stealth)
-    stealth_sync(context)
 
     try:
         page = context.new_page()
 
-        for page_num in range(1, SCRAPE_CONFIG["max_pages_per_keyword"] + 1):
-            # استخدام صيغة الروابط الأكثر استقراراً (SEO Friendly)
-            search_slug = keyword.replace(" ", "-")
-            url = f"https://www.aliexpress.com/w/wholesale-{search_slug}.html?page={page_num}&g=y&SearchText={search_slug}"
+        # ✅ حقن Stealth JS في كل صفحة جديدة
+        page.add_init_script(_STEALTH_JS)
 
-            log.info(f"   📄 Page {page_num}: {url[:70]}...")
+        for page_num in range(1, SCRAPE_CONFIG["max_pages_per_keyword"] + 1):
+            search_slug = keyword.replace(" ", "-")
+            url = (
+                f"https://www.aliexpress.com/w/wholesale-{search_slug}.html"
+                f"?page={page_num}&g=y&SearchText={search_slug}"
+            )
+
+            log.info(f"   📄 Page {page_num}: {url[:75]}...")
 
             try:
-                # الانتقال للصفحة مع انتظار تحميل الشبكة
-                page.goto(url, wait_until="load", timeout=SCRAPE_CONFIG["timeout_ms"])
+                page.goto(url, wait_until="domcontentloaded",
+                          timeout=SCRAPE_CONFIG["timeout_ms"])
 
-                # التعامل مع النوافذ المنبثقة فوراً
+                # إغلاق أي نوافذ منبثقة
                 _handle_popups(page)
 
-                # محاكاة حركة بشرية (Scroll) لتفعيل تحميل المنتجات (Lazy Loading)
-                page.evaluate("window.scrollBy(0, 800)")
+                # محاكاة تمرير بشري (Lazy Loading)
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight / 3)")
+                _random_delay((1.5, 2.5))
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
                 _random_delay((1, 2))
-                page.evaluate("window.scrollBy(0, 1200)")
 
-                # الانتظار حتى تظهر بطاقات المنتجات
+                # انتظار ظهور الروابط
                 page.wait_for_selector(
-                    "div[class*='product-item'], div[data-product-id], a[href*='/item/']",
+                    "a[href*='/item/']",
                     timeout=20_000,
                 )
 
             except PlaywrightTimeout:
-                log.warning(f"   ⚠️  Timeout on page {page_num} — AliExpress may be blocking or slow.")
-                pass
-
-            # ── استخراج البيانات باستخدام JavaScript داخل المتصفح ────────────────
-            products_on_page = page.evaluate("""
-                () => {
-                    const results = [];
-                    const seenIds = new Set();
-                    const links = document.querySelectorAll('a[href*="/item/"]');
-
-                    links.forEach(link => {
-                        const href = link.href || '';
-                        const idMatch = href.match(/\\/item\\/(\\d+)\\.html/);
-                        const itemId = idMatch ? idMatch[1] : null;
-
-                        if (itemId && !seenIds.has(itemId)) {
-                            seenIds.add(itemId);
-                            const card = link.closest('[data-index], [class*="item"], [class*="product"]') || link.parentElement;
-                            const titleEl = card.querySelector('h1, h2, h3, [class*="title"], [class*="name"]');
-                            const title = titleEl ? titleEl.innerText.trim() : "";
-                            const priceEl = card.querySelector('[class*="price"], [class*="sale"]');
-                            const priceText = priceEl ? priceEl.innerText.trim() : "";
-                            const imgEl = card.querySelector('img');
-                            const img = imgEl ? (imgEl.src || imgEl.dataset.src || "") : "";
-
-                            if (title.length > 10) {
-                                results.push({
-                                    item_id: itemId,
-                                    title: title,
-                                    price_text: priceText,
-                                    image_url: img.startsWith('http') ? img : '',
-                                    item_url: href.split('?')[0],
-                                });
-                            }
-                        }
-                    });
-                    return results;
-                }
-            """)
-
-            if not products_on_page:
-                log.info(f"   ↳ No products found on page {page_num}. Trying next page...")
+                log.warning(f"   ⚠️  Timeout page {page_num} — continuing to next.")
+                continue
+            except Exception as e:
+                log.warning(f"   ⚠️  Page load error page {page_num}: {e}")
                 continue
 
-            # فلترة وتحليل النتائج
+            # ── استخراج البيانات بـ JavaScript ───────────────────────────────
+            try:
+                products_on_page = page.evaluate("""
+                    () => {
+                        const results = [];
+                        const seenIds = new Set();
+                        const links = document.querySelectorAll('a[href*="/item/"]');
+
+                        links.forEach(link => {
+                            const href = link.href || '';
+                            const idMatch = href.match(/\\/item\\/(\\d+)\\.html/);
+                            const itemId = idMatch ? idMatch[1] : null;
+                            if (!itemId || seenIds.has(itemId)) return;
+                            seenIds.add(itemId);
+
+                            // البحث عن الحاوية الأقرب للمنتج
+                            const card = link.closest(
+                                '[data-index], [class*="item"], [class*="product"], ' +
+                                '[class*="card"], [class*="tile"]'
+                            ) || link.parentElement || document.body;
+
+                            // العنوان
+                            const titleEl = card.querySelector(
+                                'h1, h2, h3, [class*="title"], [class*="name"], span[title]'
+                            );
+                            const title = titleEl
+                                ? (titleEl.innerText || titleEl.title || '').trim()
+                                : (link.title || link.innerText || '').trim();
+
+                            // السعر
+                            const priceEl = card.querySelector(
+                                '[class*="price-current"], [class*="price--current"], ' +
+                                '[class*="sale-price"], [class*="price"]'
+                            );
+                            const priceText = priceEl ? priceEl.innerText.trim() : '';
+
+                            // الصورة
+                            const imgEl = card.querySelector('img');
+                            const img = imgEl
+                                ? (imgEl.src || imgEl.dataset.src || imgEl.dataset.lazySrc || '')
+                                : '';
+
+                            if (title && title.length > 8) {
+                                results.push({
+                                    item_id:   itemId,
+                                    title:     title.substring(0, 200),
+                                    price_text: priceText,
+                                    image_url: img.startsWith('http') ? img : '',
+                                    item_url:  href.split('?')[0],
+                                });
+                            }
+                        });
+                        return results;
+                    }
+                """)
+            except Exception as e:
+                log.warning(f"   ⚠️  JS evaluation failed page {page_num}: {e}")
+                continue
+
+            if not products_on_page:
+                log.info(f"   ↳ No products found on page {page_num}.")
+                continue
+
+            # فلترة العطور وتحليل الأسعار
+            page_added = 0
             for p in products_on_page:
-                if _is_perfume(p["title"]):
-                    p["price"] = _parse_price(p["price_text"])
-                    if p["price"] and p["price"] > 0:
-                        collected.append(p)
+                if not _is_perfume(p.get("title", "")):
+                    continue
+                price = _parse_price(p.get("price_text", ""))
+                if not price:
+                    continue
+                p["price"] = price
+                collected.append(p)
+                page_added += 1
 
-            log.info(f"   ↳ Extracted {len(products_on_page)} cards → {len(collected)} valid perfumes so far")
-
-            if page_num < SCRAPE_CONFIG["max_pages_per_keyword"]:
-                _random_delay(SCRAPE_CONFIG["delay_between_pages"])
-
-            # تصفية المنتجات بدون سعر (اختياري — تُحفظ بسعر 0 إذا أردت)
-            perfumes_valid = [
-                p for p in perfumes
-                if p.get("item_id") and p.get("title") and p.get("price")
-            ]
-
-            collected.extend(perfumes_valid)
             log.info(
-                f"   ↳ Page {page_num}: {len(products_on_page)} total "
-                f"→ {len(perfumes_valid)} perfumes kept"
+                f"   ↳ Page {page_num}: {len(products_on_page)} cards "
+                f"→ {page_added} perfumes added (total: {len(collected)})"
             )
 
             if page_num < SCRAPE_CONFIG["max_pages_per_keyword"]:
                 _random_delay(SCRAPE_CONFIG["delay_between_pages"])
 
     except Exception as exc:
-        log.error(f"   ❌ scrape_keyword error for '{keyword}': {exc}")
+        log.error(f"   ❌ scrape_keyword critical error '{keyword}': {exc}")
     finally:
         context.close()
 
@@ -265,15 +316,14 @@ def scrape_keyword(browser, keyword: str) -> list[dict]:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# ── 6. حفظ البيانات في Supabase (نفس models الموجودة) ───────────────────────
+# ── 7. حفظ البيانات في Supabase ──────────────────────────────────────────────
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _save_to_db(app, all_products: list[dict]) -> tuple[int, int, int]:
+def _save_to_db(app, all_products: list) -> tuple:
     """
     يحفظ المنتجات في Supabase باستخدام نفس SQLAlchemy models.
     يُميّز مصدر البيانات بـ source='aliexpress_scraper'.
     يتحقق من external_item_id لتجنب التكرار مع API sync.
-
     Returns: (added, updated, skipped)
     """
     from app.extensions import db
@@ -286,16 +336,13 @@ def _save_to_db(app, all_products: list[dict]) -> tuple[int, int, int]:
     added = updated = skipped = 0
 
     with app.app_context():
-        # ── إيجاد/إنشاء متجر AliExpress ───────────────────────────────────
+        # ── إيجاد متجر AliExpress ─────────────────────────────────────────
         store = Store.query.filter(Store.name.ilike("%aliexpress%")).first()
         if not store:
-            log.error(
-                "❌ AliExpress store not found in DB. "
-                "Please create it from Admin panel first."
-            )
+            log.error("❌ AliExpress store not found. Create it from Admin panel first.")
             return 0, 0, 0
 
-        # ── إيجاد/إنشاء البراند الافتراضي ─────────────────────────────────
+        # ── البراند الافتراضي ──────────────────────────────────────────────
         brand = Brand.query.filter(Brand.name.ilike("Generic")).first()
         if not brand:
             brand = Brand()
@@ -304,7 +351,7 @@ def _save_to_db(app, all_products: list[dict]) -> tuple[int, int, int]:
             db.session.add(brand)
             db.session.flush()
 
-        # ── إيجاد/إنشاء التصنيف الافتراضي ────────────────────────────────
+        # ── التصنيف الافتراضي ──────────────────────────────────────────────
         category = Category.query.filter(Category.name.ilike("عطور")).first()
         if not category:
             category = Category()
@@ -318,21 +365,21 @@ def _save_to_db(app, all_products: list[dict]) -> tuple[int, int, int]:
                 ext_id    = str(raw.get("item_id", "")).strip()
                 title     = (raw.get("title") or "").strip()
                 price     = raw.get("price")
-                image_url = raw.get("image_url", "")
-                item_url  = raw.get("item_url", "")
+                image_url = (raw.get("image_url") or "").strip()
+                item_url  = (raw.get("item_url") or "").strip()
 
                 if not ext_id or not title or not price:
                     skipped += 1
                     continue
 
-                # ── هل الرابط موجود مسبقاً (API أو Scraper)؟ ────────────
+                # ── التحقق من وجود الرابط مسبقاً ────────────────────────
                 existing_link = ItemStoreLink.query.filter_by(
                     store_id=store.id,
                     external_item_id=ext_id,
                 ).first()
 
                 if existing_link:
-                    if existing_link.price != price:
+                    if float(existing_link.price or 0) != float(price):
                         existing_link.old_price = existing_link.price
                         existing_link.price = price
                         existing_link.last_checked_at = datetime.now(timezone.utc)
@@ -341,13 +388,13 @@ def _save_to_db(app, all_products: list[dict]) -> tuple[int, int, int]:
                         skipped += 1
                     continue
 
-                # ── إيجاد أو إنشاء Item ───────────────────────────────────
+                # ── إيجاد أو إنشاء Item ────────────────────────────────────
                 item = Item.query.filter(Item.name.ilike(title)).first()
 
                 if not item:
                     base_slug = generate_slug(title) or f"product-{ext_id}"
-                    slug      = base_slug
-                    counter   = 1
+                    slug = base_slug
+                    counter = 1
                     while Item.query.filter_by(brand_id=brand.id, slug=slug).first():
                         slug = f"{base_slug}-{counter}"
                         counter += 1
@@ -369,7 +416,7 @@ def _save_to_db(app, all_products: list[dict]) -> tuple[int, int, int]:
                         img.position   = 0
                         db.session.add(img)
 
-                # ── إيجاد أو إنشاء Variant ────────────────────────────────
+                # ── إيجاد أو إنشاء Variant ─────────────────────────────────
                 variant = ItemVariant.query.filter_by(item_id=item.id).first()
                 if not variant:
                     variant = ItemVariant()
@@ -380,7 +427,7 @@ def _save_to_db(app, all_products: list[dict]) -> tuple[int, int, int]:
                     db.session.add(variant)
                     db.session.flush()
 
-                # ── إنشاء StoreLink ───────────────────────────────────────
+                # ── إنشاء StoreLink ────────────────────────────────────────
                 link = ItemStoreLink()
                 link.variant_id       = variant.id
                 link.store_id         = store.id
@@ -390,7 +437,7 @@ def _save_to_db(app, all_products: list[dict]) -> tuple[int, int, int]:
                 link.currency         = "USD"
                 link.availability     = "instock"
                 link.is_active        = True
-                link.source           = "aliexpress_scraper"   # ← يُميّزه عن API
+                link.source           = "aliexpress_scraper"
                 link.imported_at      = datetime.now(timezone.utc)
                 link.last_checked_at  = datetime.now(timezone.utc)
                 db.session.add(link)
@@ -400,11 +447,11 @@ def _save_to_db(app, all_products: list[dict]) -> tuple[int, int, int]:
                 # Commit دفعي كل 50 منتج
                 if (added + updated) % 50 == 0:
                     db.session.commit()
-                    log.info(f"   💾 Batch saved: {added} added, {updated} updated so far...")
+                    log.info(f"   💾 Batch: {added} added, {updated} updated...")
 
             except Exception as exc:
                 db.session.rollback()
-                log.error(f"   ⚠️  Error saving product '{raw.get('item_id')}': {exc}")
+                log.error(f"   ⚠️  Error saving '{raw.get('item_id')}': {exc}")
                 continue
 
         # الحفظ النهائي
@@ -418,24 +465,22 @@ def _save_to_db(app, all_products: list[dict]) -> tuple[int, int, int]:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# ── 7. نقطة التشغيل الرئيسية ─────────────────────────────────────────────────
+# ── 8. نقطة التشغيل الرئيسية ─────────────────────────────────────────────────
 # ══════════════════════════════════════════════════════════════════════════════
 
 def run_scraper():
-    """المهمة الرئيسية: تشغيل الكشط وحفظ النتائج في Supabase."""
+    """المهمة الرئيسية."""
 
     log.info("══════════════════════════════════════════════════════════")
     log.info("🕷️  ALIEXPRESS SCRAPER STARTED")
-    log.info("   Source tag : aliexpress_scraper")
-    log.info("   Keywords   : " + ", ".join(PERFUME_KEYWORDS))
+    log.info("   Mode   : Headless Chromium + Manual Stealth (no external deps)")
+    log.info("   Source : aliexpress_scraper")
     log.info("══════════════════════════════════════════════════════════")
 
-    # ── التحقق من DATABASE_URL ────────────────────────────────────────────
     if not os.environ.get("DATABASE_URL"):
-        log.error("❌ DATABASE_URL is not set in environment!")
+        log.error("❌ DATABASE_URL is not set!")
         sys.exit(1)
 
-    # ── تحميل Flask app للوصول إلى DB ─────────────────────────────────────
     try:
         from app import create_app
     except ImportError as exc:
@@ -443,9 +488,7 @@ def run_scraper():
         sys.exit(1)
 
     flask_app = create_app()
-
-    # ── تشغيل Playwright وجمع المنتجات ────────────────────────────────────
-    all_products: list[dict] = []
+    all_products: list = []
 
     with sync_playwright() as pw:
         browser = pw.chromium.launch(
@@ -454,15 +497,19 @@ def run_scraper():
                 "--no-sandbox",
                 "--disable-setuid-sandbox",
                 "--disable-dev-shm-usage",
+                "--disable-gpu",
                 "--disable-blink-features=AutomationControlled",
+                "--disable-features=IsolateOrigins,site-per-process",
+                "--window-size=1920,1080",
             ],
         )
+
         try:
             for i, keyword in enumerate(PERFUME_KEYWORDS):
                 log.info(f"🔍 [{i+1}/{len(PERFUME_KEYWORDS)}] Searching: '{keyword}'")
                 results = scrape_keyword(browser, keyword)
                 all_products.extend(results)
-                log.info(f"   ✅ '{keyword}' → {len(results)} perfumes collected")
+                log.info(f"   ✅ '{keyword}' → {len(results)} perfumes")
 
                 if i < len(PERFUME_KEYWORDS) - 1:
                     _random_delay(SCRAPE_CONFIG["delay_between_keywords"])
@@ -470,14 +517,12 @@ def run_scraper():
         finally:
             browser.close()
 
-    log.info(f"📦 Total perfumes collected: {len(all_products)}")
+    log.info(f"📦 Total collected: {len(all_products)}")
 
     if not all_products:
-        log.warning("⚠️ No perfumes collected. AliExpress may have blocked or changed layout.")
-        log.warning("   Try: reducing keywords, increasing delays, or using a proxy.")
+        log.warning("⚠️ No perfumes collected. AliExpress may be blocking.")
         sys.exit(0)
 
-    # ── حفظ في Supabase ───────────────────────────────────────────────────
     log.info("💾 Saving to Supabase...")
     added, updated, skipped = _save_to_db(flask_app, all_products)
 

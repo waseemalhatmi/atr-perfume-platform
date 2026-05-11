@@ -20,6 +20,6 @@ requests==2.31.0
 # requests already included above (used for AliExpress API HTTP calls)
 # No additional library needed — pure requests + HMAC-SHA256 built-in
 
-# ─── AliExpress Scraper (Playwright) ────────────────────────────────────────
+# ─── AliExpress Scraper (Playwright) ────────────────────────────────────────────
 playwright==1.44.0
-playwright-stealth==1.0.6
+# NOTE: Stealth is implemented manually inside the script — no extra package needed.
