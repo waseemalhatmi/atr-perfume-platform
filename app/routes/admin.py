@@ -153,13 +153,12 @@ def add_item():
         
         from app.utils.normalizers import generate_slug as slugify
         
-        new_item = Item(
-            name=data.get('name'),
-            slug=slugify(data.get('name', '')),
-            brand_id=data.get('brand_id'),
-            category_id=data.get('category_id'),
-            description=data.get('description'),
-        )
+        new_item = Item()
+        new_item.name = data.get('name')
+        new_item.slug = slugify(data.get('name', ''))
+        new_item.brand_id = data.get('brand_id')
+        new_item.category_id = data.get('category_id')
+        new_item.description = data.get('description')
         db.session.add(new_item)
         db.session.flush()
 
@@ -170,43 +169,43 @@ def add_item():
             image_path = os.path.join(uploads_dir, filename)
             image.save(image_path)
             
-            item_img = ItemImage(item_id=new_item.id, image_path=filename, position=0)
+            item_img = ItemImage()
+            item_img.item_id = new_item.id
+            item_img.image_path = filename
+            item_img.position = 0
             db.session.add(item_img)
 
         # Handle Variants & Store Links
         variants = advanced_data.get('variants', [])
         for v_data in variants:
-            variant = ItemVariant(
-                item_id=new_item.id,
-                title=v_data.get('title'),
-                sku=v_data.get('sku'),
-                attributes=v_data.get('attributes'),
-                is_default=v_data.get('is_default', False)
-            )
+            variant = ItemVariant()
+            variant.item_id = new_item.id
+            variant.title = v_data.get('title')
+            variant.sku = v_data.get('sku')
+            variant.attributes = v_data.get('attributes')
+            variant.is_default = v_data.get('is_default', False)
             db.session.add(variant)
             db.session.flush()
             
             for link_data in v_data.get('store_links', []):
-                link = ItemStoreLink(
-                    variant_id=variant.id,
-                    store_id=link_data.get('store_id'),
-                    external_item_id=link_data.get('external_item_id'),
-                    affiliate_url=link_data.get('affiliate_url'),
-                    price=link_data.get('price'),
-                    old_price=link_data.get('old_price'),
-                    currency=link_data.get('currency', 'USD'),
-                    is_active=link_data.get('is_active', True)
-                )
+                link = ItemStoreLink()
+                link.variant_id = variant.id
+                link.store_id = link_data.get('store_id')
+                link.external_item_id = link_data.get('external_item_id')
+                link.affiliate_url = link_data.get('affiliate_url')
+                link.price = link_data.get('price')
+                link.old_price = link_data.get('old_price')
+                link.currency = link_data.get('currency', 'USD')
+                link.is_active = link_data.get('is_active', True)
                 db.session.add(link)
 
         # Handle Specifications
         specs = advanced_data.get('specifications', {})
         for category, spec_json in specs.items():
-            spec = ItemSpecification(
-                item_id=new_item.id,
-                category=category,
-                spec_json=spec_json
-            )
+            spec = ItemSpecification()
+            spec.item_id = new_item.id
+            spec.category = category
+            spec.spec_json = spec_json
             db.session.add(spec)
 
         db.session.commit()
@@ -243,7 +242,10 @@ def update_item(item_id):
             if old_img:
                 db.session.delete(old_img)
             
-            item_img = ItemImage(item_id=item.id, image_path=filename, position=0)
+            item_img = ItemImage()
+            item_img.item_id = item.id
+            item_img.image_path = filename
+            item_img.position = 0
             db.session.add(item_img)
 
         # Update variants
@@ -263,13 +265,12 @@ def update_item(item_id):
                     variant.attributes = v_data.get('attributes')
                     variant.is_default = v_data.get('is_default', False)
                 else:
-                    variant = ItemVariant(
-                        item_id=item.id,
-                        title=v_data.get('title'),
-                        sku=v_data.get('sku'),
-                        attributes=v_data.get('attributes'),
-                        is_default=v_data.get('is_default', False)
-                    )
+                    variant = ItemVariant()
+                    variant.item_id = item.id
+                    variant.title = v_data.get('title')
+                    variant.sku = v_data.get('sku')
+                    variant.attributes = v_data.get('attributes')
+                    variant.is_default = v_data.get('is_default', False)
                     db.session.add(variant)
                 
                 db.session.flush()
@@ -291,16 +292,15 @@ def update_item(item_id):
                         link.currency = link_data.get('currency', 'USD')
                         link.is_active = link_data.get('is_active', True)
                     else:
-                        link = ItemStoreLink(
-                            variant_id=variant.id,
-                            store_id=link_data.get('store_id'),
-                            external_item_id=link_data.get('external_item_id'),
-                            affiliate_url=link_data.get('affiliate_url'),
-                            price=link_data.get('price'),
-                            old_price=link_data.get('old_price'),
-                            currency=link_data.get('currency', 'USD'),
-                            is_active=link_data.get('is_active', True)
-                        )
+                        link = ItemStoreLink()
+                        link.variant_id = variant.id
+                        link.store_id = link_data.get('store_id')
+                        link.external_item_id = link_data.get('external_item_id')
+                        link.affiliate_url = link_data.get('affiliate_url')
+                        link.price = link_data.get('price')
+                        link.old_price = link_data.get('old_price')
+                        link.currency = link_data.get('currency', 'USD')
+                        link.is_active = link_data.get('is_active', True)
                         db.session.add(link)
 
         # Update specifications
@@ -316,11 +316,10 @@ def update_item(item_id):
                 if spec:
                     spec.spec_json = spec_json
                 else:
-                    spec = ItemSpecification(
-                        item_id=item.id,
-                        category=category,
-                        spec_json=spec_json
-                    )
+                    spec = ItemSpecification()
+                    spec.item_id = item.id
+                    spec.category = category
+                    spec.spec_json = spec_json
                     db.session.add(spec)
 
         db.session.commit()
@@ -492,7 +491,9 @@ def update_settings():
         if setting:
             setting.value = v
         else:
-            setting = Setting(key=k, value=v)
+            setting = Setting()
+            setting.key = k
+            setting.value = v
             db.session.add(setting)
     
     db.session.commit()
@@ -512,7 +513,9 @@ def add_brand():
         return jsonify({"success": False, "error": "Name required"}), 400
     try:
         from app.utils.normalizers import generate_slug as slugify
-        b = Brand(name=name, slug=slugify(name))
+        b = Brand()
+        b.name = name
+        b.slug = slugify(name)
         db.session.add(b)
         db.session.commit()
         return jsonify({"success": True, "id": b.id, "name": b.name})
@@ -543,7 +546,9 @@ def add_category():
         return jsonify({"success": False, "error": "Name required"}), 400
     try:
         from app.utils.normalizers import generate_slug as slugify
-        c = Category(name=name, slug=slugify(name))
+        c = Category()
+        c.name = name
+        c.slug = slugify(name)
         db.session.add(c)
         db.session.commit()
         return jsonify({"success": True, "id": c.id, "name": c.name})
@@ -591,16 +596,15 @@ def create_store():
     try:
         from app.utils.normalizers import generate_slug
         store_name = data.get("name")
-        store = Store(
-            name=store_name,
-            slug=generate_slug(store_name),
-            website=data.get("website", "#"),   # website is NOT NULL in schema
-            country=data.get("country", "Global"),
-            currency=data.get("currency", "SAR"),
-            xml_feed_url=data.get("xml_feed_url"),
-            is_auto_sync=data.get("is_auto_sync", False),
-            logo_url=data.get("logo_url")
-        )
+        store = Store()
+        store.name = store_name
+        store.slug = generate_slug(store_name)
+        store.website = data.get("website", "#")
+        store.country = data.get("country", "Global")
+        store.currency = data.get("currency", "SAR")
+        store.xml_feed_url = data.get("xml_feed_url")
+        store.is_auto_sync = data.get("is_auto_sync", False)
+        store.logo_url = data.get("logo_url")
         db.session.add(store)
         db.session.commit()
         return jsonify({"success": True, "id": store.id})
@@ -634,7 +638,6 @@ def update_store(id):
 @admin_bp.route("/stores/<int:id>/sync", methods=["POST"])
 @admin_required
 def trigger_store_sync(id):
-    # Check if store exists
     store = Store.query.get_or_404(id)
     if not store.xml_feed_url:
         return jsonify({"success": False, "error": "Store has no XML Feed URL"}), 400
@@ -642,6 +645,15 @@ def trigger_store_sync(id):
     from app.tasks import task_sync_store_feed
     task_sync_store_feed.delay(id)
     return jsonify({"success": True, "message": "Sync started in background"})
+
+@admin_bp.route("/aliexpress/sync", methods=["POST"])
+@admin_required
+def trigger_aliexpress_sync():
+    data = request.json or {}
+    keywords = data.get('keywords', 'perfume')
+    from app.tasks import task_sync_aliexpress
+    task_sync_aliexpress.delay(keywords)
+    return jsonify({"success": True, "message": f"AliExpress sync started for '{keywords}'"})
 
 @admin_bp.route("/stores/<int:id>/sync-logs", methods=["GET"])
 @admin_required

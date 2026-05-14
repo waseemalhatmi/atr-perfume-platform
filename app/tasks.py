@@ -262,4 +262,31 @@ def task_download_remote_images():
     log.info("task_succeeded", task_name="download_remote_images", processed=count)
     return {"processed": count}
 
+@celery_app.task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=300,
+    soft_time_limit=900,  # 15 minutes
+    name="tasks.sync_aliexpress"
+)
+def task_sync_aliexpress(self, keywords='perfume'):
+    """
+    Background task to sync products from AliExpress API.
+    """
+    from app.services.aliexpress_service import AliExpressService
+    
+    try:
+        log.info("task_started", task_name="sync_aliexpress", keywords=keywords)
+        success, message = AliExpressService.sync_products(keywords=keywords)
+        
+        if not success:
+            log.error("task_failed", task_name="sync_aliexpress", error=message)
+            raise self.retry(exc=Exception(message))
+            
+        log.info("task_succeeded", task_name="sync_aliexpress", message=message)
+        return {"success": True, "message": message}
+    except Exception as exc:
+        log.warning("task_retry", task_name="sync_aliexpress", error=str(exc))
+        raise self.retry(exc=exc)
+
 

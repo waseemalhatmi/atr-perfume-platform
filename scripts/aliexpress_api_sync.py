@@ -184,92 +184,68 @@ def _refresh_access_token() -> str:
     return _active_token
 
 
-def fetch_products_from_api(keyword: str, page_index: int = 1, _retry: bool = False) -> dict:
+def fetch_products_from_api(keyword: str, page_index: int = 1) -> dict:
     """
-    إرسال طلب بحث إلى AliExpress API وإرجاع البيانات.
-    عند استلام خطأ IllegalAccessToken يُجدد التوكن تلقائياً ويعيد المحاولة مرة واحدة.
+    إرسال طلب بحث إلى AliExpress Affiliate API وإرجاع البيانات.
+    يستخدم نظام التوقيع الرسمي المدمج في iop.py.
     """
-    global _active_token
-    timestamp = str(int(time.time() * 1000))
-
-    params = {
-        "app_key":     ALIEXPRESS_APP_KEY,
-        "method":      "aliexpress.ds.text.search",
-        "timestamp":   timestamp,
-        "sign_method": "md5",
-        "session":     _active_token,   # ✅ يستخدم التوكن النشط (قابل للتجديد)
-        # معلمات البحث
-        "keyWord":     keyword,
-        "local":       FETCH_CONFIG["local"],
-        "countryCode": FETCH_CONFIG["countryCode"],
-        "currency":    FETCH_CONFIG["currency"],
-        "sortBy":      FETCH_CONFIG["sortBy"],
-        "pageSize":    str(FETCH_CONFIG["pageSize"]),
-        "pageIndex":   str(page_index),
-    }
-
-    # توليد التوقيع (MD5)
-    params["sign"] = _build_signature(params, ALIEXPRESS_SECRET)
-
+    log.info(f"   📡 Calling AliExpress Affiliate API for: '{keyword}' (Page {page_index})")
+    
     try:
-        response = requests.post(
-            ALIEXPRESS_API_URL,
-            data=params,
-            timeout=30
-        )
-        raw = response.text
+        # ✅ استخدام IOP SDK المدمج في المشروع
+        client = iop.IopClient(ALIEXPRESS_API_URL, ALIEXPRESS_APP_KEY, ALIEXPRESS_SECRET)
+        request = iop.IopRequest('aliexpress.affiliate.product.query')
+        
+        # إعداد المعلمات حسب طلب المستخدم
+        request.add_api_param('keywords', keyword)
+        request.add_api_param('page_no', str(page_index))
+        request.add_api_param('page_size', str(FETCH_CONFIG["pageSize"]))
+        request.add_api_param('platform_product_type', 'ALL')
+        request.add_api_param('target_currency', FETCH_CONFIG["currency"])
+        request.add_api_param('target_language', 'EN')
+        request.add_api_param('ship_to_country', FETCH_CONFIG["countryCode"])
+        
+        # إذا كان الـ Tracking ID متوفراً
+        tracking_id = os.environ.get("ALIEXPRESS_TRACKING_ID", "default_tracking")
+        request.add_api_param('tracking_id', tracking_id)
 
-        # ✅ تسجيل الرد الخام دائماً في أول طلب لكل كلمة مفتاحية
-        if page_index == 1:
-            log.info(f"   ↳ Raw API response (first 300 chars): {raw[:300]}")
-
-        data = response.json()
-
-        # ✅ كشف أخطاء AliExpress
-        if "error_response" in data:
-            err = data["error_response"]
-            err_code = err.get("code", "")
-            log.error(f"   ↳ API Error: code={err_code} sub_code={err.get('sub_code')} msg={err.get('msg')}")
-
-            # ── تجديد التوكن تلقائياً عند انتهاء صلاحيته ─────────────────
-            if err_code in ("IllegalAccessToken", "invalid-sessionkey") and not _retry:
-                log.info("   ↳ جارٍ تجديد التوكن والمحاولة مجدداً...")
-                refreshed = _refresh_access_token()
-                if refreshed != _active_token or refreshed == ALIEXPRESS_TOKEN:
-                    # إذا تم التجديد فعلاً، أعد المحاولة مرة واحدة
-                    _active_token = refreshed
-                    time.sleep(1)  # انتظار قصير قبل إعادة المحاولة
-                    return fetch_products_from_api(keyword, page_index, _retry=True)
+        response = client.execute(request)
+        
+        if response.type == "error":
+            log.error(f"   ❌ API Error Response: {response.body}")
             return {}
 
+        data = json.loads(response.body)
         return data
 
-    except requests.exceptions.RequestException as e:
-        log.error(f"API request failed: {e}")
-        return {}
-    except ValueError as e:
-        log.error(f"Failed to parse API JSON response: {e}")
+    except Exception as e:
+        log.error(f"   ❌ Exception during API call: {e}")
         return {}
 
 
 def extract_products(api_response: dict) -> tuple:
     """
-    استخراج قائمة المنتجات من استجابة الـ API بشكل آمن.
+    استخراج قائمة المنتجات من استجابة Affiliate API.
+    الهيكل: resp_result -> result -> products -> product
     """
     try:
-        data = (
-            api_response
-            .get("aliexpress_ds_text_search_response", {})
-            .get("data", {})
-        )
-        if not data:
+        resp = api_response.get("aliexpress_affiliate_product_query_response", {})
+        result_wrapper = resp.get("resp_result", {})
+        
+        if result_wrapper.get("resp_code") != 200:
+            log.warning(f"   ⚠️ API Business Error: {result_wrapper.get('resp_msg')}")
             return [], 0
-        products = data.get("products", {}).get("item_display_bean", [])
-        if isinstance(products, dict):
-            products = [products]
-        return products, int(data.get("total_count", 0))
-    except (AttributeError, KeyError, TypeError) as e:
-        log.warning(f"extract_products error: {e}")
+            
+        result_data = result_wrapper.get("result", {})
+        products_list = result_data.get("products", {}).get("product", [])
+        total_count = result_data.get("total_record_count", 0)
+        
+        if isinstance(products_list, dict):
+            products_list = [products_list]
+            
+        return products_list, int(total_count)
+    except Exception as e:
+        log.warning(f"   ⚠️ extract_products error: {e}")
         return [], 0
 
 
@@ -354,16 +330,15 @@ def run_api_sync():
 
         for raw in all_products_raw:
             try:
-                ext_id    = str(raw.get("item_id", ""))
-                title     = (raw.get("title") or "").strip()
-                image_url = raw.get("item_main_pic", "")
-                item_url  = raw.get("item_url", "")
-                cate_id   = str(raw.get("cate_id", ""))
-
-                # تحليل السعر بشكل آمن
+                ext_id    = str(raw.get("product_id") or "")
+                title     = (raw.get("product_title") or "").strip()
+                image_url = raw.get("product_main_image_url", "")
+                item_url  = raw.get("promotion_link", "")
+                
+                # تحليل السعر بشكل آمن (Affiliate API يستخدم sale_price)
                 try:
-                    price = float(str(raw.get("target_sale_price") or raw.get("sale_price") or 0).replace(",", "."))
-                    old_price = float(str(raw.get("target_original_price") or raw.get("original_price") or 0).replace(",", "."))
+                    price = float(str(raw.get("sale_price") or 0).replace(",", "."))
+                    old_price = float(str(raw.get("original_price") or 0).replace(",", "."))
                 except (ValueError, TypeError):
                     price, old_price = 0.0, 0.0
 

@@ -115,6 +115,12 @@ class Config:
     # Redis
     REDIS_URL = os.environ.get("REDIS_URL")
 
+    # AliExpress Affiliate API
+    ALIEXPRESS_API_URL = os.environ.get("ALIEXPRESS_API_URL", "https://api-sg.aliexpress.com/sync")
+    ALIEXPRESS_APP_KEY = os.environ.get("ALIEXPRESS_APP_KEY")
+    ALIEXPRESS_APP_SECRET = os.environ.get("ALIEXPRESS_APP_SECRET")
+    ALIEXPRESS_TRACKING_ID = os.environ.get("ALIEXPRESS_TRACKING_ID")
+
     # Rate limiting — MUST use Redis in production
     RATELIMIT_ENABLED = os.environ.get("RATELIMIT_ENABLED", "True") == "True"
     RATELIMIT_HEADERS_ENABLED = True
