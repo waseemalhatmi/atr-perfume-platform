@@ -150,12 +150,12 @@ class AdmitadService:
             score += SCORE_VALUES["volume_boost"]
             details["matched_keywords"].append("volume_detected")
 
-        # Perfume indicators boost
+        # 3. Perfume indicators boost
         if any(indicator in full_text for indicator in PERFUME_INDICATORS):
             score += SCORE_VALUES["indicator_boost"]
             details["matched_keywords"].append("perfume_indicator")
 
-        # إذا المنتج يحتوي كلمات عطرية لكن بدون مؤشرات احترافية
+        # 4. إذا المنتج يحتوي كلمات عطرية لكن بدون مؤشرات احترافية
         if any(word in full_text for word in WHITELIST_PERFUME):
             if not any(indicator in full_text for indicator in PERFUME_INDICATORS):
                 score += SCORE_VALUES["missing_indicator_penalty"]
@@ -163,26 +163,21 @@ class AdmitadService:
                 
                 # منع منتجات ليست عطور حقيقية
                 fake_perfume_patterns = [
-                    "perfume bottle",
-                    "empty bottle",
-                    "refillable bottle",
-                    "atomizer",
-                    "sprayer",
-                    "car perfume",
-                    "air freshener"
+                    "perfume bottle", "empty bottle", "refillable bottle", 
+                    "atomizer", "sprayer", "car perfume", "air freshener"
                 ]
-
                 if any(pattern in full_text for pattern in fake_perfume_patterns):
                     score -= 80
                     details["blacklisted"] = True        
-                # 3. الخصم للممنوعات
-                for word in WEIGHTS["negative"]:
-                    if word in full_text:
-                        score += SCORE_VALUES["blacklist_penalty"]
-                        details["blacklisted"] = True
-                        break
-                
-                return score, details
+
+        # 5. الخصم للممنوعات (دائماً)
+        for word in WEIGHTS["negative"]:
+            if word in full_text:
+                score += SCORE_VALUES["blacklist_penalty"]
+                details["blacklisted"] = True
+                break
+        
+        return score, details
 
     @staticmethod
     def sync_store_feed(store_id):
