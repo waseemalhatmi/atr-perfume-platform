@@ -38,12 +38,11 @@ def record_view(target, target_type, user=None, ip_address=None):
     # If both threads insert simultaneously, the losing thread gets IntegrityError
     # and returns 'already viewed' safely — no duplicate row is ever committed.
     try:
-        view = View(
-            user_id=user.id if user else None,
-            ip_address=ip_address,
-            target_type=target_type,
-            target_id=target.id
-        )
+        view = View()
+        view.user_id = user.id if user else None
+        view.ip_address = ip_address
+        view.target_type = target_type
+        view.target_id = target.id
         db.session.add(view)
         db.session.flush()  # Trigger constraint check before committing
     except IntegrityError:
@@ -85,11 +84,10 @@ def save_item(user, target_type, target_id):
         db.session.delete(existing)
         status = 'unsaved'
     else:
-        save = Save(
-            user_id=user.id,
-            target_type=target_type,
-            target_id=target_id
-        )
+        save = Save()
+        save.user_id = user.id
+        save.target_type = target_type
+        save.target_id = target_id
         db.session.add(save)
 
     return {"success": True, "status": status}

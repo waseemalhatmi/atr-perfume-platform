@@ -94,7 +94,7 @@ def create_app():
     )
 
     # ── Cache — Environment-Aware Selection ──────────────────────────────────
-    _redis_url = app.config.get("REDIS_URL", "")
+    _redis_url = app.config.get("REDIS_URL") or ""
     _is_real_redis = _redis_url.startswith(("redis://", "rediss://", "unix://"))
 
     if _is_real_redis:

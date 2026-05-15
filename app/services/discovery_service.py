@@ -287,13 +287,13 @@ def _refresh_item_recommendations_impl(item_id):
         elif target_item.brand_id == candidate.brand_id:
             rec_type = 'related'
 
-        recommendations.append(ItemRecommendation(
-            item_id=item_id,
-            recommended_item_id=candidate.id,
-            match_score=round(similarity),
-            price_diff=price_diff,
-            rec_type=rec_type
-        ))
+        rec = ItemRecommendation()
+        rec.item_id = item_id
+        rec.recommended_item_id = candidate.id
+        rec.match_score = round(similarity)
+        rec.price_diff = price_diff
+        rec.rec_type = rec_type
+        recommendations.append(rec)
 
     # Save top recommendations (flush only — caller is responsible for commit)
     # This keeps the function safe to use in any context including celery tasks

@@ -9,6 +9,10 @@ class View(db.Model):
     target_id = db.Column(db.Integer, nullable=False)
     ip_address = db.Column(db.String(45), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def __init__(self, **kwargs):
+        super(View, self).__init__(**kwargs)
+    
     @property
     def target(self):
         return self.item
@@ -66,6 +70,10 @@ class Save(db.Model):
     target_type = db.Column(db.String(50), nullable=False, default='item')
     target_id = db.Column(db.Integer, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def __init__(self, **kwargs):
+        super(Save, self).__init__(**kwargs)
+    
     item = db.relationship(
         "Item",
         primaryjoin="and_(foreign(Save.target_id) == Item.id, Save.target_type == 'item')",
@@ -118,6 +126,10 @@ class UserInterest(db.Model):
     target_id = db.Column(db.Integer, nullable=False)
     interaction_count = db.Column(db.Integer, default=0)
     last_interaction_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __init__(self, **kwargs):
+        super(UserInterest, self).__init__(**kwargs)
+
     user = db.relationship("User", back_populates="user_interests")
     entity_scores = db.relationship("UserEntityInterest", back_populates="user_interest", cascade="all, delete-orphan")
     __table_args__ = (
@@ -133,6 +145,10 @@ class UserEntityInterest(db.Model):
     category_id = db.Column(db.Integer, nullable=True)
     topic_id = db.Column(db.Integer, nullable=True)
     score = db.Column(db.Float, default=0.0)
+
+    def __init__(self, **kwargs):
+        super(UserEntityInterest, self).__init__(**kwargs)
+
     user_interest = db.relationship("UserInterest", back_populates="entity_scores")
     __table_args__ = (
         db.CheckConstraint(
@@ -218,6 +234,9 @@ class ComparisonLog(db.Model):
     item_ids = db.Column(db.JSON, nullable=False)  # List of compared item IDs
     winner_id = db.Column(db.Integer, db.ForeignKey('items.id', ondelete="SET NULL"), nullable=True)
     created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
+
+    def __init__(self, **kwargs):
+        super(ComparisonLog, self).__init__(**kwargs)
 
     user = db.relationship("User", backref="comparison_logs")
     winner = db.relationship("Item", foreign_keys=[winner_id])

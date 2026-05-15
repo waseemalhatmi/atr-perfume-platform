@@ -408,6 +408,9 @@ class ItemRecommendation(db.Model):
     # server_default: timestamp set by the DB engine (timezone-safe, works in bulk inserts)
     created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
 
+    def __init__(self, **kwargs):
+        super(ItemRecommendation, self).__init__(**kwargs)
+
     # Relationships
     item = db.relationship('Item', foreign_keys=[item_id], backref=db.backref('recommendations_generated', lazy='dynamic'))
     recommended_item = db.relationship('Item', foreign_keys=[recommended_item_id], backref=db.backref('as_recommendation', lazy='dynamic'))

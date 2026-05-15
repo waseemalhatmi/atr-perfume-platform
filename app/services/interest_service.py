@@ -37,13 +37,12 @@ def update_user_interest(
     ).first()
 
     if not user_interest:
-        user_interest = UserInterest(
-            user_id=user_id,
-            target_type=target_type,
-            target_id=target_id,
-            interaction_count=0,
-            last_interaction_at=datetime.utcnow()
-        )
+        user_interest = UserInterest()
+        user_interest.user_id = user_id
+        user_interest.target_type = target_type
+        user_interest.target_id = target_id
+        user_interest.interaction_count = 0
+        user_interest.last_interaction_at = datetime.utcnow()
         db.session.add(user_interest)
         db.session.flush()
 
@@ -60,13 +59,12 @@ def update_user_interest(
         if entity_interest:
             entity_interest.score += weight
         else:
-            db.session.add(
-                UserEntityInterest(
-                    user_interest_id=user_interest.id,
-                    score=weight,
-                    **entities
-                )
-            )
+            uei = UserEntityInterest()
+            uei.user_interest_id = user_interest.id
+            uei.score = weight
+            for k, v in entities.items():
+                setattr(uei, k, v)
+            db.session.add(uei)
 
 
 def handle_interaction_interest(user, target, action):
@@ -105,13 +103,12 @@ def handle_interaction_interest(user, target, action):
     ).first()
 
     if not user_interest:
-        user_interest = UserInterest(
-            user_id=user.id,
-            target_type=target_type,
-            target_id=target.id,
-            interaction_count=0,
-            last_interaction_at=datetime.utcnow()
-        )
+        user_interest = UserInterest()
+        user_interest.user_id = user.id
+        user_interest.target_type = target_type
+        user_interest.target_id = target.id
+        user_interest.interaction_count = 0
+        user_interest.last_interaction_at = datetime.utcnow()
         db.session.add(user_interest)
         db.session.flush()  # Get PK so entity records can reference it
 
@@ -132,10 +129,9 @@ def handle_interaction_interest(user, target, action):
             if entity_interest:
                 entity_interest.score += weight
             else:
-                db.session.add(
-                    UserEntityInterest(
-                        user_interest_id=user_interest.id,
-                        score=weight,
-                        **entity
-                    )
-                )
+                uei = UserEntityInterest()
+                uei.user_interest_id = user_interest.id
+                uei.score = weight
+                for k, v in entity.items():
+                    setattr(uei, k, v)
+                db.session.add(uei)

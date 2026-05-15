@@ -334,12 +334,11 @@ def api_compare():
 
         # 5. Logging
         try:
-            log = ComparisonLog(
-                user_id=current_user.id if current_user.is_authenticated else None,
-                item_ids=item_ids,
-                winner_id=winner['id']
-            )
-            db.session.add(log)
+            comp_log = ComparisonLog()
+            comp_log.user_id = current_user.id if current_user.is_authenticated else None
+            comp_log.item_ids = item_ids
+            comp_log.winner_id = winner['id']
+            db.session.add(comp_log)
             db.session.commit()
         except:
             db.session.rollback()

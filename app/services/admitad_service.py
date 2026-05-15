@@ -23,20 +23,62 @@ WHITELIST_PERFUME = [
 
 # --- 🚫 قائمة الممنوعات الشاملة (Blacklist) 🚫 ---
 BLACKLIST_ITEMS = [
-    'lcd', 'screen', 'fan', 'refrigerator', 'battery', 'voltage', 'car', 'automobile', 
-    'electronics', 'tool', 'meter', 'cable', 'adapter', 'phone', 'charger', 'module', 
-    'relay', 'sensor', 'board', 'circuit', 'vacuum', 'machine', 'motor', 'tester tool',
-    'humidifier', 'diffuser machine', 'dispenser', 'intelligent', 'thermostatic',
-    'burner', 'holder', 'stand', 'rack', 'vase', 'pot', 'kettle', 'decor', 'ornament', 
-    'statue', 'sculpture', 'handmade', 'wooden', 'metal', 'ceramic', 'glass', 'frame', 
-    'poster', 'sticker', 'hook', 'base', 'tray', 'box only', 'empty bottle',
-    't-shirt', 'shirt', 'clothing', 'shoes', 'pants', 'jacket', 'hat', 'bag', 'wallet', 
-    'watch', 'jewelry', 'toy', 'doll', 'vest', 'knitted', 'floral print', 'floral pattern',
-    'case for', 'cover for', 'kit for', 'replacement', 'repair', 'part', 'connector', 
-    'plug', 'switch', 'socket', 'bulb', 'led', 'lamp', 'tempered glass'
+    # Electronics
+    'lcd', 'screen', 'fan', 'refrigerator', 'battery', 'voltage',
+    'electronics', 'tool', 'meter', 'cable', 'adapter', 'phone',
+    'charger', 'module', 'relay', 'sensor', 'board', 'circuit',
+    'vacuum', 'machine', 'motor', 'tester tool', 'usb',
+    'keyboard', 'mouse', 'laptop', 'pc', 'gaming',
+
+    # Diffusers / Aroma devices
+    'humidifier', 'diffuser machine', 'aromatherapy',
+    'essential oil diffuser', 'usb diffuser', 'mini humidifier',
+    'air freshener', 'car fragrance', 'car perfume',
+    'fragrance lamp', 'oil burner', 'wax melt',
+
+    # Home decor
+    'dispenser', 'holder', 'stand', 'rack', 'vase',
+    'pot', 'kettle', 'decor', 'ornament', 'statue',
+    'sculpture', 'handmade', 'wooden', 'metal',
+    'ceramic', 'glass', 'frame', 'poster', 'sticker',
+    'hook', 'base', 'tray',
+
+    # Empty bottles / accessories
+    'empty bottle', 'perfume bottle', 'atomizer',
+    'refillable', 'sprayer bottle', 'sample bottle',
+    'case for', 'cover for', 'kit for', 'replacement',
+    'repair', 'part', 'connector', 'plug', 'switch',
+    'socket', 'bulb', 'led', 'lamp',
+
+    # Clothing
+    't-shirt', 'shirt', 'clothing', 'shoes', 'pants',
+    'jacket', 'hat', 'bag', 'wallet', 'watch',
+    'jewelry', 'toy', 'doll', 'vest',
+    'knitted', 'floral print', 'floral pattern',
+
+    # Automotive
+    'car accessory', 'automobile'
 ]
 
 RE_VOLUME = re.compile(r'\d+\s*(ml|مل|oz|أوز|ounce)', re.IGNORECASE)
+
+PERFUME_INDICATORS = [
+    'edp',
+    'edt',
+    'parfum',
+    'eau de parfum',
+    'eau de toilette',
+    'spray',
+    'natural spray',
+    'vaporisateur',
+    'ml',
+    'oz',
+    'ounce',
+    'perfume oil',
+    'fragrance oil',
+    'tester',
+    'extrait'
+]
 
 # --- 🎯 نظام الأوزان الاحترافي (Weight System) 🎯 ---
 WEIGHTS = {
@@ -54,7 +96,9 @@ SCORE_VALUES = {
     "category_boost": 20,
     "volume_boost": 20,
     "blacklist_penalty": -100,
-    "minimum_score": 20
+    "minimum_score": 20,
+    "indicator_boost": 20,
+"missing_indicator_penalty": -30,
 }
 
 class AdmitadService:
@@ -105,15 +149,40 @@ class AdmitadService:
         if RE_VOLUME.search(full_text):
             score += SCORE_VALUES["volume_boost"]
             details["matched_keywords"].append("volume_detected")
-            
-        # 3. الخصم للممنوعات
-        for word in WEIGHTS["negative"]:
-            if word in full_text:
-                score += SCORE_VALUES["blacklist_penalty"]
-                details["blacklisted"] = True
-                break
-        
-        return score, details
+
+        # Perfume indicators boost
+        if any(indicator in full_text for indicator in PERFUME_INDICATORS):
+            score += SCORE_VALUES["indicator_boost"]
+            details["matched_keywords"].append("perfume_indicator")
+
+        # إذا المنتج يحتوي كلمات عطرية لكن بدون مؤشرات احترافية
+        if any(word in full_text for word in WHITELIST_PERFUME):
+            if not any(indicator in full_text for indicator in PERFUME_INDICATORS):
+                score += SCORE_VALUES["missing_indicator_penalty"]
+                details["matched_keywords"].append("missing_perfume_indicator")            
+                
+                # منع منتجات ليست عطور حقيقية
+                fake_perfume_patterns = [
+                    "perfume bottle",
+                    "empty bottle",
+                    "refillable bottle",
+                    "atomizer",
+                    "sprayer",
+                    "car perfume",
+                    "air freshener"
+                ]
+
+                if any(pattern in full_text for pattern in fake_perfume_patterns):
+                    score -= 80
+                    details["blacklisted"] = True        
+                # 3. الخصم للممنوعات
+                for word in WEIGHTS["negative"]:
+                    if word in full_text:
+                        score += SCORE_VALUES["blacklist_penalty"]
+                        details["blacklisted"] = True
+                        break
+                
+                return score, details
 
     @staticmethod
     def sync_store_feed(store_id):

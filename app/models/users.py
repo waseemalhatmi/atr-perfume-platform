@@ -16,6 +16,9 @@ class User(db.Model, UserMixin):
     # server_default=db.func.now() is timezone-aware and always set by the DB.
     created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
     
+    def __init__(self, **kwargs):
+        super(User, self).__init__(**kwargs)
+    
     # Relationships
     newsletter_subscription = db.relationship(
         "NewsletterSubscriber",
@@ -62,6 +65,10 @@ class NewsletterSubscriber(db.Model):
     is_active = db.Column(db.Boolean, default=False)
     subscribed_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
     unsubscribed_at = db.Column(db.DateTime, nullable=True)
+    
+    def __init__(self, **kwargs):
+        super(NewsletterSubscriber, self).__init__(**kwargs)
+    
     user = db.relationship("User", back_populates="newsletter_subscription")
     
     def __repr__(self):

@@ -68,7 +68,8 @@ def register():
     if User.query.filter_by(email=email).first():
         return jsonify({"success": False, "error": "البريد الإلكتروني مسجل مسبقاً."}), 409
 
-    user = User(email=email)
+    user = User()
+    user.email = email
     user.set_password(password)
     db.session.add(user)
     db.session.flush()
@@ -78,7 +79,11 @@ def register():
         if subscriber:
             subscriber.user_id = user.id
         else:
-            db.session.add(NewsletterSubscriber(email=email, user_id=user.id, is_active=True))
+            new_sub = NewsletterSubscriber()
+            new_sub.email = email
+            new_sub.user_id = user.id
+            new_sub.is_active = True
+            db.session.add(new_sub)
 
     db.session.commit()
     login_user(user)
@@ -179,8 +184,11 @@ def google_callback():
             user.provider  = "google"
             db.session.commit()
         else:
-            user = User(email=email, google_id=google_id, provider="google",
-                        password_hash=generate_password_hash(secrets.token_hex(32)))
+            user = User()
+            user.email = email
+            user.google_id = google_id
+            user.provider = "google"
+            user.password_hash = generate_password_hash(secrets.token_hex(32))
             db.session.add(user)
             db.session.commit()
 
