@@ -8,7 +8,8 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "cross-env NODE_OPTIONS=--max-old-space-size=400 vite build",
+    "install-optional": "npm ci --include=optional",
+    "build": "npm run install-optional && cross-env NODE_OPTIONS=--max-old-space-size=400 vite build",
     "preview": "vite preview"
   },
   "devDependencies": {
