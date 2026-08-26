@@ -39,6 +39,8 @@
     "zustand": "^5.0.12"
   },
   "optionalDependencies": {
-    "@rolldown/binding-win32-x64-msvc": "^1.2.6"
+    "@rolldown/binding-win32-x64-msvc": "^1.2.6",
+    "@rolldown/binding-linux-x64-gnu": "^1.2.6",
+    "@rolldown/binding-wasm32-wasi": "^1.2.6"
   }
 }
