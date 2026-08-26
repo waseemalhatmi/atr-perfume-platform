@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Vite timestamp cache files (auto-generated, OS-specific)
+*.timestamp-*.mjs
+vite.config.ts.timestamp-*
