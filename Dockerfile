@@ -14,25 +14,42 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # STAGE 1: Frontend Builder
 # ─────────────────────────────────────────────────────────────────────────────
-FROM node:22-slim AS frontend-builder
+# Use Node.js 22 on Debian Bookworm (full) to guarantee glibc ≥ 2.28,
+# which is required by @rolldown/binding-linux-x64-gnu (native Rust addon).
+FROM node:22-bookworm-slim AS frontend-builder
 
 LABEL stage="frontend-builder"
 
 WORKDIR /build/frontend
 
-# ── Copy package files first (leverages Docker layer caching) ─────────────────
-COPY frontend/package*.json ./
+# ── Copy only the manifest files first (maximises layer cache hits) ────────────
+COPY frontend/package.json ./
 
-# Force removal of Windows-generated package-lock.json to bypass npm optional binding bugs
-# This ensures that Linux-specific bindings (like @rolldown/binding-linux-x64-gnu) are downloaded.
-RUN rm -f package-lock.json && npm install
+# ── Install ALL dependencies including platform-native optional bindings ────────
+#
+# WHY we do NOT use `npm ci` here:
+#   • npm ci requires package-lock.json to be committed from the SAME OS
+#   • A Windows-generated lockfile records Windows platform optionals
+#     (@rolldown/binding-win32-x64-msvc) — these are missing on Linux.
+#   • npm has a well-known bug (github.com/npm/cli/issues/4828) where
+#     re-running `npm ci --include=optional` after the fact still fails
+#     to fetch the correct platform binding.
+#
+# WHY `npm install --include=optional` works:
+#   • npm detects the current OS (linux/x64) and installs the correct
+#     native binding: @rolldown/binding-linux-x64-gnu
+#   • A fresh lockfile is generated inside the container — no OS mismatch.
+#
+RUN npm install --include=optional
 
 # ── Copy the rest of the frontend source ─────────────────────────────────────
 COPY frontend/ ./
 
 # ── Build the production bundle ───────────────────────────────────────────────
-# Output will be at /build/frontend/dist
-RUN npm run build
+# We call vite build directly (with NODE_OPTIONS for memory limit).
+# We do NOT use `npm run build` because that script calls `npm run install-optional`
+# which invokes `npm ci` again — causing the exact lockfile-mismatch error above.
+RUN NODE_OPTIONS=--max-old-space-size=400 npx vite build
 
 # Verify the build succeeded and print the output size for transparency
 RUN echo "✅ Frontend build complete. Output:" && ls -lah dist/
